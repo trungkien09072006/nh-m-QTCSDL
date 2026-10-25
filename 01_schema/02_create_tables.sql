@@ -60,15 +60,15 @@ CREATE TABLE LearningResources (
 );
 
 CREATE TABLE Questions (
-    QuestionID    INT IDENTITY PRIMARY KEY,
-    CompetencyID  INT NOT NULL REFERENCES Competencies(CompetencyID),
-    Content       NVARCHAR(MAX) NOT NULL,
-    Difficulty    TINYINT NOT NULL CHECK (Difficulty BETWEEN 1 AND 5),
-    Explanation   NVARCHAR(MAX) NULL,
+    QuestionID   INT IDENTITY PRIMARY KEY,
+    CompetencyID INT NOT NULL REFERENCES Competencies(CompetencyID),
+    Content      NVARCHAR(MAX) NOT NULL,
+    Difficulty   TINYINT NOT NULL CHECK (Difficulty BETWEEN 1 AND 5),
+    Explanation  NVARCHAR(MAX) NULL,
     IsAIGenerated BIT NOT NULL DEFAULT 0,
-    IsApproved    BIT NOT NULL DEFAULT 0,
-    CreatedBy     INT NOT NULL REFERENCES Users(UserID),
-    CreatedAt     DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+    IsApproved   BIT NOT NULL DEFAULT 0,
+    CreatedBy    INT NOT NULL REFERENCES Users(UserID),
+    CreatedAt    DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
 
 CREATE TABLE QuestionOptions (
@@ -102,7 +102,7 @@ CREATE TABLE ExamQuestions (
     UNIQUE (ExamID, OrderNo)
 );
 
-/* ===== 3. LÀM BÀI ===== */
+/* ===== 3. LÀM BÀI (ĐÃ CẬP NHẬT RÀNG BUỘC THEO PHÂN CÔNG) ===== */
 CREATE TABLE ExamAttempts (
     AttemptID   INT IDENTITY PRIMARY KEY,
     ExamID      INT NOT NULL REFERENCES Exams(ExamID),
@@ -110,16 +110,34 @@ CREATE TABLE ExamAttempts (
     StartedAt   DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
     SubmittedAt DATETIME2 NULL,
     Score       DECIMAL(6,2) NULL,
-    CHECK (SubmittedAt IS NULL OR SubmittedAt >= StartedAt)
+    CHECK (SubmittedAt IS NULL OR SubmittedAt >= StartedAt),
+    
+    -- ĐÍCH THAM CHIẾU: Cho phép AttemptAnswers nối khóa ngoại ghép (AttemptID, ExamID)
+    CONSTRAINT UQ_ExamAttempts_Attempt_Exam UNIQUE (AttemptID, ExamID)
 );
 
 CREATE TABLE AttemptAnswers (
-    AttemptID      INT NOT NULL REFERENCES ExamAttempts(AttemptID) ON DELETE CASCADE,
-    QuestionID     INT NOT NULL REFERENCES Questions(QuestionID),
+    AttemptID      INT NOT NULL,
+    ExamID         INT NOT NULL, -- BỔ SUNG: Cột ExamID để xác định đề thi của lượt làm
+    QuestionID     INT NOT NULL,
     SelectedOption INT NULL,
     IsCorrect      BIT NULL,
     TimeSpentSec   INT NULL CHECK (TimeSpentSec >= 0),
+    
     PRIMARY KEY (AttemptID, QuestionID),
+
+    -- FK 1: Đảm bảo AttemptID và ExamID khớp đúng với lượt làm trong ExamAttempts
+    CONSTRAINT FK_AttemptAnswers_ExamAttempts
+        FOREIGN KEY (AttemptID, ExamID)
+        REFERENCES ExamAttempts(AttemptID, ExamID)
+        ON DELETE CASCADE,
+
+    -- FK 2: Đảm bảo QuestionID phải nằm trong đề thi ExamID của lượt làm đó (Ràng buộc Đề thi)
+    CONSTRAINT FK_AttemptAnswers_ExamQuestions
+        FOREIGN KEY (ExamID, QuestionID)
+        REFERENCES ExamQuestions(ExamID, QuestionID),
+
+    -- FK 3: Đảm bảo SelectedOption phải thuộc về đúng QuestionID đó (Ràng buộc Đáp án)
     CONSTRAINT FK_AttemptAnswers_Option_Question
         FOREIGN KEY (SelectedOption, QuestionID)
         REFERENCES QuestionOptions(OptionID, QuestionID)
@@ -220,7 +238,7 @@ CREATE TABLE AuditLog (
 );
 GO
 
-/* ===== 6b. THÔNG BÁO  ===== */
+/* ===== 6b. THÔNG BÁO ===== */
 CREATE TABLE Notifications (
     NotificationID BIGINT IDENTITY PRIMARY KEY,
     UserID         INT NOT NULL REFERENCES Users(UserID),             
