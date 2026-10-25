@@ -1,0 +1,193 @@
+USE AILearningDB;
+GO
+
+/* ===== 8. TRIGGER: LỊCH HỌC ===== */
+CREATE TRIGGER TR_LearningPathItems_ValidateSchedule
+ON LearningPathItems
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (
+        SELECT 1
+        FROM inserted AS i
+        JOIN LearningPaths AS p ON p.PathID = i.PathID
+        WHERE i.ScheduledDate < p.StartDate
+           OR i.ScheduledDate > p.EndDate
+    )
+    BEGIN
+        ;THROW 51000, 'ScheduledDate must be within the learning path date range.', 1;
+    END;
+END;
+GO
+
+CREATE TRIGGER TR_LearningPaths_ValidateDateRange
+ON LearningPaths
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF (UPDATE(StartDate) OR UPDATE(EndDate))
+       AND EXISTS (
+            SELECT 1
+            FROM inserted AS p
+            JOIN LearningPathItems AS i ON i.PathID = p.PathID
+            WHERE i.ScheduledDate < p.StartDate
+               OR i.ScheduledDate > p.EndDate
+       )
+    BEGIN
+        ;THROW 51001, 'The learning path date range cannot exclude a scheduled item.', 1;
+    END;
+END;
+GO
+
+/* ===== 9. TRIGGER: KIỂM TRA ROLE ===== */
+CREATE TRIGGER TR_ParentStudent_ValidateRoles
+ON ParentStudent
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (
+        SELECT 1
+        FROM inserted AS i
+        JOIN Users AS u ON u.UserID = i.ParentID
+        JOIN Roles AS r ON r.RoleID = u.RoleID
+        WHERE r.RoleName <> 'Parent'
+    )
+    BEGIN
+        ;THROW 51002, 'ParentID must belong to a user with role Parent.', 1;
+    END;
+END;
+GO
+
+CREATE TRIGGER TR_StudentProfiles_ValidateRole
+ON StudentProfiles
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (
+        SELECT 1
+        FROM inserted AS i
+        JOIN Users AS u ON u.UserID = i.StudentID
+        JOIN Roles AS r ON r.RoleID = u.RoleID
+        WHERE r.RoleName <> 'Student'
+    )
+    BEGIN
+        ;THROW 51003, 'StudentID must belong to a user with role Student.', 1;
+    END;
+END;
+GO
+
+CREATE TRIGGER TR_Users_ValidateRoleChange
+ON Users
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF UPDATE(RoleID)
+       AND EXISTS (
+            SELECT 1
+            FROM inserted AS i
+            JOIN Roles AS r ON r.RoleID = i.RoleID
+            WHERE (r.RoleName <> 'Parent'
+                   AND EXISTS (SELECT 1 FROM ParentStudent AS ps WHERE ps.ParentID = i.UserID))
+               OR (r.RoleName <> 'Student'
+                   AND EXISTS (SELECT 1 FROM StudentProfiles AS sp WHERE sp.StudentID = i.UserID))
+       )
+    BEGIN
+        ;THROW 51004, 'Cannot change role: user is still referenced as Parent or Student.', 1;
+    END;
+END;
+GO
+
+/* ===== 10. TRIGGER: AUDIT ===== */
+CREATE TRIGGER TR_Users_Audit
+ON Users
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO AuditLog (TableName, Action, RecordKey)
+    SELECT 'Users', 'INSERT', CAST(i.UserID AS NVARCHAR(100))
+    FROM inserted AS i
+    WHERE NOT EXISTS (SELECT 1 FROM deleted AS d WHERE d.UserID = i.UserID)
+    UNION ALL
+    SELECT 'Users', 'UPDATE', CAST(i.UserID AS NVARCHAR(100))
+    FROM inserted AS i
+    JOIN deleted AS d ON d.UserID = i.UserID
+    UNION ALL
+    SELECT 'Users', 'DELETE', CAST(d.UserID AS NVARCHAR(100))
+    FROM deleted AS d
+    WHERE NOT EXISTS (SELECT 1 FROM inserted AS i WHERE i.UserID = d.UserID);
+END;
+GO
+
+CREATE TRIGGER TR_Questions_Audit
+ON Questions
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO AuditLog (TableName, Action, RecordKey)
+    SELECT 'Questions', 'INSERT', CAST(i.QuestionID AS NVARCHAR(100))
+    FROM inserted AS i
+    WHERE NOT EXISTS (SELECT 1 FROM deleted AS d WHERE d.QuestionID = i.QuestionID)
+    UNION ALL
+    SELECT 'Questions', 'UPDATE', CAST(i.QuestionID AS NVARCHAR(100))
+    FROM inserted AS i
+    JOIN deleted AS d ON d.QuestionID = i.QuestionID
+    UNION ALL
+    SELECT 'Questions', 'DELETE', CAST(d.QuestionID AS NVARCHAR(100))
+    FROM deleted AS d
+    WHERE NOT EXISTS (SELECT 1 FROM inserted AS i WHERE i.QuestionID = d.QuestionID);
+END;
+GO
+
+CREATE TRIGGER TR_SystemSettings_Audit
+ON SystemSettings
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO AuditLog (TableName, Action, RecordKey)
+    SELECT 'SystemSettings', 'INSERT', i.SettingKey
+    FROM inserted AS i
+    WHERE NOT EXISTS (SELECT 1 FROM deleted AS d WHERE d.SettingKey = i.SettingKey)
+    UNION ALL
+    SELECT 'SystemSettings', 'UPDATE', i.SettingKey
+    FROM inserted AS i
+    JOIN deleted AS d ON d.SettingKey = i.SettingKey
+    UNION ALL
+    SELECT 'SystemSettings', 'DELETE', d.SettingKey
+    FROM deleted AS d
+    WHERE NOT EXISTS (SELECT 1 FROM inserted AS i WHERE i.SettingKey = d.SettingKey);
+END;
+GO
+
+/* ===== 1. Chỉ cho duyệt câu hỏi khi có >= 2 lựa chọn và đúng 1 đáp án đúng ===== */
+CREATE OR ALTER TRIGGER dbo.TR_Questions_ValidateApproval
+ON dbo.Questions
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF UPDATE(IsApproved)
+       AND EXISTS (
+            SELECT 1
+            FROM inserted AS i
+            WHERE i.IsApproved = 1
+              AND (
+                    (SELECT COUNT(*) FROM dbo.QuestionOptions AS o
+                     WHERE o.QuestionID = i.QuestionID) < 2
+                 OR (SELECT COUNT(*) FROM dbo.QuestionOptions AS o
+                     WHERE o.QuestionID = i.QuestionID AND o.IsCorrect = 1) <> 1
+              )
+       )
+    BEGIN
+        ;THROW 52000, 'A question needs at least 2 options and exactly 1 correct option before approval.', 1;
+    END;
+END;
+GO
