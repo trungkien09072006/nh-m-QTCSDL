@@ -1,0 +1,107 @@
+USE AILearningDB;
+GO
+
+/* ===== 4. DASHBOARD===== */
+CREATE OR ALTER VIEW dbo.vw_StudentDashboard
+AS
+SELECT sp.StudentID,
+       u.FullName,
+       sp.TargetScore,
+       sp.ExamDate,
+       CASE WHEN sp.ExamDate IS NULL THEN NULL
+            ELSE DATEDIFF(DAY, CAST(SYSDATETIME() AS DATE), sp.ExamDate) END AS DaysToExam,
+       ISNULL(l.Minutes7d, 0)    AS StudyMinutes7d,
+       ISNULL(l.ActiveDays7d, 0) AS ActiveDays7d,        
+       m.AvgMastery,
+       a.LatestScore,
+       ISNULL(pp.ItemsTotal, 0)  AS PathItemsTotal,
+       ISNULL(pp.ItemsDone, 0)   AS PathItemsDone,
+       CASE WHEN ISNULL(pp.ItemsTotal, 0) = 0 THEN NULL
+            ELSE CAST(100.0 * pp.ItemsDone / pp.ItemsTotal AS DECIMAL(5,1)) END AS PathProgressPct,
+       pr.PredictedScore         AS LatestPredictedScore,
+       pr.ProbReachTarget        AS LatestProbReachTarget
+FROM dbo.StudentProfiles AS sp
+JOIN dbo.Users AS u ON u.UserID = sp.StudentID
+OUTER APPLY (
+    SELECT SUM(l.DurationMin) AS Minutes7d,
+           COUNT(DISTINCT CAST(l.LoggedAt AS DATE)) AS ActiveDays7d
+    FROM dbo.StudyLogs AS l
+    WHERE l.StudentID = sp.StudentID
+      AND l.LoggedAt >= DATEADD(DAY, -7, SYSDATETIME())
+) AS l
+OUTER APPLY (
+    SELECT AVG(CAST(c.Mastery AS DECIMAL(9,6))) AS AvgMastery
+    FROM dbo.StudentCompetency AS c
+    WHERE c.StudentID = sp.StudentID AND c.AttemptCount > 0
+) AS m
+OUTER APPLY (
+    SELECT TOP (1) ea.Score AS LatestScore
+    FROM dbo.ExamAttempts AS ea
+    WHERE ea.StudentID = sp.StudentID AND ea.SubmittedAt IS NOT NULL
+    ORDER BY ea.SubmittedAt DESC, ea.AttemptID DESC
+) AS a
+OUTER APPLY (
+    SELECT COUNT(*) AS ItemsTotal,
+           SUM(CASE WHEN i.Status = 'DONE' THEN 1 ELSE 0 END) AS ItemsDone
+    FROM dbo.LearningPaths AS p
+    JOIN dbo.LearningPathItems AS i ON i.PathID = p.PathID
+    WHERE p.StudentID = sp.StudentID AND p.Status = 'ACTIVE'
+) AS pp
+OUTER APPLY (
+    SELECT TOP (1) s.PredictedScore, s.ProbReachTarget
+    FROM dbo.ScorePredictions AS s
+    WHERE s.StudentID = sp.StudentID
+    ORDER BY s.PredictedAt DESC, s.PredictionID DESC
+) AS pr;
+GO
+
+-- Phụ huynh: lọc theo ParentID ở tầng ứng dụng (RBAC)
+CREATE OR ALTER VIEW dbo.vw_ParentOverview
+AS
+SELECT ps.ParentID, d.*
+FROM dbo.ParentStudent AS ps
+JOIN dbo.vw_StudentDashboard AS d ON d.StudentID = ps.StudentID;
+GO
+
+/* Giáo viên: đánh giá chất lượng câu hỏi.
+   QualityFlag chỉ xét khi có ít nhất 20 lượt trả lời đã nộp:
+   TOO_EASY nếu tỉ lệ đúng >= 0.95, TOO_HARD nếu <= 0.10. */
+CREATE OR ALTER VIEW dbo.vw_QuestionQuality
+AS
+SELECT q.QuestionID, q.CompetencyID, q.Difficulty, q.IsAIGenerated, q.IsApproved,
+       ISNULL(s.TimesAnswered, 0) AS TimesAnswered,
+       s.CorrectRate,
+       s.AvgTimeSec,
+       CASE WHEN ISNULL(s.TimesAnswered, 0) < 20 THEN 'INSUFFICIENT_DATA'
+            WHEN s.CorrectRate >= 0.95 THEN 'TOO_EASY'
+            WHEN s.CorrectRate <= 0.10 THEN 'TOO_HARD'
+            ELSE 'OK' END AS QualityFlag
+FROM dbo.Questions AS q
+OUTER APPLY (
+    SELECT COUNT(*) AS TimesAnswered,
+           CAST(AVG(CAST(aa.IsCorrect AS DECIMAL(5,4))) AS DECIMAL(5,4)) AS CorrectRate,
+           AVG(aa.TimeSpentSec) AS AvgTimeSec
+    FROM dbo.AttemptAnswers AS aa
+    JOIN dbo.ExamAttempts AS ea ON ea.AttemptID = aa.AttemptID
+    WHERE aa.QuestionID = q.QuestionID
+      AND ea.SubmittedAt IS NOT NULL
+      AND aa.IsCorrect IS NOT NULL
+) AS s;
+GO
+
+/* Giáo viên: theo dõi chất lượng gợi ý của AI theo ngày
+   (AcceptanceRate chỉ tính trên các gợi ý đã có phản hồi). */
+CREATE OR ALTER VIEW dbo.vw_RecommendationQuality
+AS
+SELECT CAST(r.CreatedAt AS DATE) AS RecDate,
+       COUNT(*) AS Total,
+       SUM(CASE WHEN r.IsAccepted = 1 THEN 1 ELSE 0 END) AS Accepted,
+       SUM(CASE WHEN r.IsAccepted = 0 THEN 1 ELSE 0 END) AS Rejected,
+       SUM(CASE WHEN r.IsAccepted IS NULL THEN 1 ELSE 0 END) AS Pending,
+       CASE WHEN SUM(CASE WHEN r.IsAccepted IS NOT NULL THEN 1 ELSE 0 END) = 0 THEN NULL
+            ELSE CAST(1.0 * SUM(CASE WHEN r.IsAccepted = 1 THEN 1 ELSE 0 END)
+                      / SUM(CASE WHEN r.IsAccepted IS NOT NULL THEN 1 ELSE 0 END) AS DECIMAL(5,4))
+       END AS AcceptanceRate
+FROM dbo.Recommendations AS r
+GROUP BY CAST(r.CreatedAt AS DATE);
+GO
