@@ -55,15 +55,12 @@ OUTER APPLY (
 ) AS pr;
 GO
 
--- Phụ huynh: lọc theo ParentID ở tầng ứng dụng (RBAC)
 CREATE OR ALTER VIEW dbo.vw_ParentOverview
 AS
 SELECT ps.ParentID, d.*
 FROM dbo.ParentStudent AS ps
 JOIN dbo.vw_StudentDashboard AS d ON d.StudentID = ps.StudentID;
 GO
-
-/* Giáo viên: đánh giá chất lượng câu hỏi.
    QualityFlag chỉ xét khi có ít nhất 20 lượt trả lời đã nộp:
    TOO_EASY nếu tỉ lệ đúng >= 0.95, TOO_HARD nếu <= 0.10. */
 CREATE OR ALTER VIEW dbo.vw_QuestionQuality
@@ -89,8 +86,6 @@ OUTER APPLY (
 ) AS s;
 GO
 
-/* Giáo viên: theo dõi chất lượng gợi ý của AI theo ngày
-   (AcceptanceRate chỉ tính trên các gợi ý đã có phản hồi). */
 CREATE OR ALTER VIEW dbo.vw_RecommendationQuality
 AS
 SELECT CAST(r.CreatedAt AS DATE) AS RecDate,
