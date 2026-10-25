@@ -54,7 +54,8 @@ CREATE TABLE LearningResources (
     ResourceType  VARCHAR(20) NOT NULL CHECK (ResourceType IN ('VIDEO','ARTICLE','SLIDE','EXERCISE')),
     Url           NVARCHAR(500) NULL,
     EstimatedMin  INT NOT NULL DEFAULT 15 CHECK (EstimatedMin > 0),
-    CreatedBy     INT NOT NULL REFERENCES Users(UserID)
+    CreatedBy     INT NOT NULL REFERENCES Users(UserID),
+    CONSTRAINT UQ_LearningResources_Resource_Competency UNIQUE (ResourceID, CompetencyID)
 );
 
 CREATE TABLE Questions (
@@ -136,13 +137,16 @@ CREATE TABLE LearningPaths (
 );
 
 CREATE TABLE LearningPathItems (
-    ItemID       INT IDENTITY PRIMARY KEY,
-    PathID       INT NOT NULL REFERENCES LearningPaths(PathID) ON DELETE CASCADE,
-    CompetencyID INT NOT NULL REFERENCES Competencies(CompetencyID),
-    ResourceID   INT NULL REFERENCES LearningResources(ResourceID),
+    ItemID        INT IDENTITY PRIMARY KEY,
+    PathID        INT NOT NULL REFERENCES LearningPaths(PathID) ON DELETE CASCADE,
+    CompetencyID  INT NOT NULL REFERENCES Competencies(CompetencyID),
+    ResourceID    INT NULL,
     ScheduledDate DATE NOT NULL,
-    Priority     TINYINT NOT NULL DEFAULT 3 CHECK (Priority BETWEEN 1 AND 5),
-    Status       VARCHAR(10) NOT NULL DEFAULT 'TODO' CHECK (Status IN ('TODO','DOING','DONE','SKIPPED'))
+    Priority      TINYINT NOT NULL DEFAULT 3 CHECK (Priority BETWEEN 1 AND 5),
+    Status        VARCHAR(10) NOT NULL DEFAULT 'TODO' CHECK (Status IN ('TODO','DOING','DONE','SKIPPED')),
+    CONSTRAINT FK_LearningPathItems_ResourceCompetency
+        FOREIGN KEY (ResourceID, CompetencyID)
+        REFERENCES LearningResources(ResourceID, CompetencyID)
 );
 
 CREATE TABLE Recommendations (
@@ -205,4 +209,98 @@ CREATE TABLE AuditLog (
     ChangedBy  SYSNAME NOT NULL DEFAULT SUSER_SNAME(),
     ChangedAt  DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
+GO
+
+/* ===== 7. RÀNG BUỘC VÀ INDEX PHỤC VỤ TRUY VẤN ===== */
+CREATE UNIQUE NONCLUSTERED INDEX UX_LearningPaths_Student_Active
+    ON LearningPaths(StudentID)
+    WHERE Status = 'ACTIVE';
+
+CREATE NONCLUSTERED INDEX IX_LearningPaths_Student_GeneratedAt
+    ON LearningPaths(StudentID, GeneratedAt DESC)
+    INCLUDE (StartDate, EndDate, Status);
+
+CREATE NONCLUSTERED INDEX IX_LearningPathItems_Path_Date_Status
+    ON LearningPathItems(PathID, ScheduledDate, Status)
+    INCLUDE (CompetencyID, ResourceID, Priority);
+
+CREATE NONCLUSTERED INDEX IX_LearningResources_Competency
+    ON LearningResources(CompetencyID)
+    INCLUDE (Title, ResourceType, EstimatedMin);
+
+CREATE NONCLUSTERED INDEX IX_Questions_Competency_Approved_Difficulty
+    ON Questions(CompetencyID, IsApproved, Difficulty)
+    INCLUDE (IsAIGenerated, CreatedAt);
+
+CREATE NONCLUSTERED INDEX IX_ExamAttempts_Student_StartedAt
+    ON ExamAttempts(StudentID, StartedAt DESC)
+    INCLUDE (ExamID, SubmittedAt, Score);
+
+CREATE NONCLUSTERED INDEX IX_ExamAttempts_Exam_Student
+    ON ExamAttempts(ExamID, StudentID, StartedAt DESC)
+    INCLUDE (SubmittedAt, Score);
+
+CREATE NONCLUSTERED INDEX IX_ExamQuestions_Question
+    ON ExamQuestions(QuestionID, ExamID)
+    INCLUDE (OrderNo);
+
+CREATE NONCLUSTERED INDEX IX_StudentCompetency_Competency
+    ON StudentCompetency(CompetencyID, StudentID)
+    INCLUDE (Mastery, AttemptCount, UpdatedAt);
+
+CREATE NONCLUSTERED INDEX IX_StudyLogs_Student_LoggedAt
+    ON StudyLogs(StudentID, LoggedAt DESC)
+    INCLUDE (ActivityType, DurationMin);
+
+CREATE NONCLUSTERED INDEX IX_TutorSessions_Student_StartedAt
+    ON TutorSessions(StudentID, StartedAt DESC);
+
+CREATE NONCLUSTERED INDEX IX_TutorMessages_Session_SentAt
+    ON TutorMessages(SessionID, SentAt)
+    INCLUDE (Sender, QuestionID);
+
+CREATE NONCLUSTERED INDEX IX_Recommendations_Student_CreatedAt
+    ON Recommendations(StudentID, CreatedAt DESC)
+    INCLUDE (QuestionID, ResourceID, IsAccepted);
+GO
+
+CREATE TRIGGER TR_LearningPathItems_ValidateSchedule
+ON LearningPathItems
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1
+        FROM inserted AS i
+        INNER JOIN LearningPaths AS p ON p.PathID = i.PathID
+        WHERE i.ScheduledDate < p.StartDate
+           OR i.ScheduledDate > p.EndDate
+    )
+    BEGIN
+        ;THROW 51000, 'ScheduledDate must be within the learning path date range.', 1;
+    END;
+END;
+GO
+
+CREATE TRIGGER TR_LearningPaths_ValidateDateRange
+ON LearningPaths
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF (UPDATE(StartDate) OR UPDATE(EndDate))
+       AND EXISTS (
+            SELECT 1
+            FROM inserted AS p
+            INNER JOIN LearningPathItems AS i ON i.PathID = p.PathID
+            WHERE i.ScheduledDate < p.StartDate
+               OR i.ScheduledDate > p.EndDate
+       )
+    BEGIN
+        ;THROW 51001, 'The learning path date range cannot exclude a scheduled item.', 1;
+    END;
+END;
 GO
