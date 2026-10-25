@@ -33,17 +33,17 @@ CREATE TABLE ParentStudent (
 );
 
 /* ===== 2. NỘI DUNG HỌC ===== */
-CREATE TABLE Subjects (               -- lĩnh vực: Tư duy logic, Định lượng, Đọc hiểu...
+CREATE TABLE Subjects (               
     SubjectID   INT IDENTITY PRIMARY KEY,
     SubjectName NVARCHAR(100) NOT NULL UNIQUE,
     Description NVARCHAR(500) NULL
 );
 
-CREATE TABLE Competencies (           -- năng lực/kỹ năng con
+CREATE TABLE Competencies (         
     CompetencyID   INT IDENTITY PRIMARY KEY,
     SubjectID      INT NOT NULL REFERENCES Subjects(SubjectID),
     CompetencyName NVARCHAR(150) NOT NULL,
-    ParentCompID   INT NULL REFERENCES Competencies(CompetencyID),  -- cây năng lực
+    ParentCompID   INT NULL REFERENCES Competencies(CompetencyID),  
     UNIQUE (SubjectID, CompetencyName)
 );
 
