@@ -3,8 +3,8 @@ GO
 
 /* ===== 1. NGƯỜI DÙNG ===== */
 CREATE TABLE Roles (
-    RoleID      INT IDENTITY PRIMARY KEY,
-    RoleName    NVARCHAR(50) NOT NULL UNIQUE   -- Admin, Teacher, Student, Parent
+    RoleID   INT IDENTITY PRIMARY KEY,
+    RoleName NVARCHAR(50) NOT NULL UNIQUE  
 );
 
 CREATE TABLE Users (
@@ -33,41 +33,42 @@ CREATE TABLE ParentStudent (
 );
 
 /* ===== 2. NỘI DUNG HỌC ===== */
-CREATE TABLE Subjects (               -- lĩnh vực: Tư duy logic, Định lượng, Đọc hiểu...
+CREATE TABLE Subjects (
     SubjectID   INT IDENTITY PRIMARY KEY,
     SubjectName NVARCHAR(100) NOT NULL UNIQUE,
     Description NVARCHAR(500) NULL
 );
 
-CREATE TABLE Competencies (           -- năng lực/kỹ năng con
+CREATE TABLE Competencies (
     CompetencyID   INT IDENTITY PRIMARY KEY,
     SubjectID      INT NOT NULL REFERENCES Subjects(SubjectID),
     CompetencyName NVARCHAR(150) NOT NULL,
-    ParentCompID   INT NULL REFERENCES Competencies(CompetencyID),  -- cây năng lực
-    UNIQUE (SubjectID, CompetencyName)
+    ParentCompID   INT NULL REFERENCES Competencies(CompetencyID),
+    UNIQUE (SubjectID, CompetencyName),
+    CHECK (ParentCompID IS NULL OR ParentCompID <> CompetencyID)
 );
 
 CREATE TABLE LearningResources (
-    ResourceID    INT IDENTITY PRIMARY KEY,
-    CompetencyID  INT NOT NULL REFERENCES Competencies(CompetencyID),
-    Title         NVARCHAR(200) NOT NULL,
-    ResourceType  VARCHAR(20) NOT NULL CHECK (ResourceType IN ('VIDEO','ARTICLE','SLIDE','EXERCISE')),
-    Url           NVARCHAR(500) NULL,
-    EstimatedMin  INT NOT NULL DEFAULT 15 CHECK (EstimatedMin > 0),
-    CreatedBy     INT NOT NULL REFERENCES Users(UserID),
+    ResourceID   INT IDENTITY PRIMARY KEY,
+    CompetencyID INT NOT NULL REFERENCES Competencies(CompetencyID),
+    Title        NVARCHAR(200) NOT NULL,
+    ResourceType VARCHAR(20) NOT NULL CHECK (ResourceType IN ('VIDEO','ARTICLE','SLIDE','EXERCISE')),
+    Url          NVARCHAR(500) NULL,
+    EstimatedMin INT NOT NULL DEFAULT 15 CHECK (EstimatedMin > 0),
+    CreatedBy    INT NOT NULL REFERENCES Users(UserID),
     CONSTRAINT UQ_LearningResources_Resource_Competency UNIQUE (ResourceID, CompetencyID)
 );
 
 CREATE TABLE Questions (
-    QuestionID    INT IDENTITY PRIMARY KEY,
-    CompetencyID  INT NOT NULL REFERENCES Competencies(CompetencyID),
-    Content       NVARCHAR(MAX) NOT NULL,
-    Difficulty    TINYINT NOT NULL CHECK (Difficulty BETWEEN 1 AND 5),
-    Explanation   NVARCHAR(MAX) NULL,
+    QuestionID   INT IDENTITY PRIMARY KEY,
+    CompetencyID INT NOT NULL REFERENCES Competencies(CompetencyID),
+    Content      NVARCHAR(MAX) NOT NULL,
+    Difficulty   TINYINT NOT NULL CHECK (Difficulty BETWEEN 1 AND 5),
+    Explanation  NVARCHAR(MAX) NULL,
     IsAIGenerated BIT NOT NULL DEFAULT 0,
-    IsApproved    BIT NOT NULL DEFAULT 0,
-    CreatedBy     INT NOT NULL REFERENCES Users(UserID),
-    CreatedAt     DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+    IsApproved   BIT NOT NULL DEFAULT 0,
+    CreatedBy    INT NOT NULL REFERENCES Users(UserID),
+    CreatedAt    DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
 
 CREATE TABLE QuestionOptions (
@@ -76,8 +77,13 @@ CREATE TABLE QuestionOptions (
     OptionLabel CHAR(1) NOT NULL,
     OptionText  NVARCHAR(1000) NOT NULL,
     IsCorrect   BIT NOT NULL DEFAULT 0,
-    UNIQUE (QuestionID, OptionLabel)
+    UNIQUE (QuestionID, OptionLabel),
+    CONSTRAINT UQ_QuestionOptions_Option_Question UNIQUE (OptionID, QuestionID) 
 );
+
+CREATE UNIQUE NONCLUSTERED INDEX UX_QuestionOptions_OneCorrect
+    ON QuestionOptions(QuestionID)
+    WHERE IsCorrect = 1;
 
 CREATE TABLE Exams (
     ExamID      INT IDENTITY PRIMARY KEY,
@@ -96,7 +102,7 @@ CREATE TABLE ExamQuestions (
     UNIQUE (ExamID, OrderNo)
 );
 
-/* ===== 3. LÀM BÀI ===== */
+/* ===== 3. LÀM BÀI (ĐÃ CẬP NHẬT RÀNG BUỘC THEO PHÂN CÔNG) ===== */
 CREATE TABLE ExamAttempts (
     AttemptID   INT IDENTITY PRIMARY KEY,
     ExamID      INT NOT NULL REFERENCES Exams(ExamID),
@@ -104,16 +110,37 @@ CREATE TABLE ExamAttempts (
     StartedAt   DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
     SubmittedAt DATETIME2 NULL,
     Score       DECIMAL(6,2) NULL,
-    CHECK (SubmittedAt IS NULL OR SubmittedAt >= StartedAt)
+    CHECK (SubmittedAt IS NULL OR SubmittedAt >= StartedAt),
+    
+    -- ĐÍCH THAM CHIẾU: Cho phép AttemptAnswers nối khóa ngoại ghép (AttemptID, ExamID)
+    CONSTRAINT UQ_ExamAttempts_Attempt_Exam UNIQUE (AttemptID, ExamID)
 );
 
 CREATE TABLE AttemptAnswers (
-    AttemptID      INT NOT NULL REFERENCES ExamAttempts(AttemptID) ON DELETE CASCADE,
-    QuestionID     INT NOT NULL REFERENCES Questions(QuestionID),
-    SelectedOption INT NULL REFERENCES QuestionOptions(OptionID),
+    AttemptID      INT NOT NULL,
+    ExamID         INT NOT NULL, -- BỔ SUNG: Cột ExamID để xác định đề thi của lượt làm
+    QuestionID     INT NOT NULL,
+    SelectedOption INT NULL,
     IsCorrect      BIT NULL,
     TimeSpentSec   INT NULL CHECK (TimeSpentSec >= 0),
-    PRIMARY KEY (AttemptID, QuestionID)
+    
+    PRIMARY KEY (AttemptID, QuestionID),
+
+    -- FK 1: Đảm bảo AttemptID và ExamID khớp đúng với lượt làm trong ExamAttempts
+    CONSTRAINT FK_AttemptAnswers_ExamAttempts
+        FOREIGN KEY (AttemptID, ExamID)
+        REFERENCES ExamAttempts(AttemptID, ExamID)
+        ON DELETE CASCADE,
+
+    -- FK 2: Đảm bảo QuestionID phải nằm trong đề thi ExamID của lượt làm đó (Ràng buộc Đề thi)
+    CONSTRAINT FK_AttemptAnswers_ExamQuestions
+        FOREIGN KEY (ExamID, QuestionID)
+        REFERENCES ExamQuestions(ExamID, QuestionID),
+
+    -- FK 3: Đảm bảo SelectedOption phải thuộc về đúng QuestionID đó (Ràng buộc Đáp án)
+    CONSTRAINT FK_AttemptAnswers_Option_Question
+        FOREIGN KEY (SelectedOption, QuestionID)
+        REFERENCES QuestionOptions(OptionID, QuestionID)
 );
 
 /* ===== 4. CÁ NHÂN HÓA ===== */
@@ -150,23 +177,23 @@ CREATE TABLE LearningPathItems (
 );
 
 CREATE TABLE Recommendations (
-    RecID        INT IDENTITY PRIMARY KEY,
-    StudentID    INT NOT NULL REFERENCES StudentProfiles(StudentID),
-    QuestionID   INT NULL REFERENCES Questions(QuestionID),
-    ResourceID   INT NULL REFERENCES LearningResources(ResourceID),
-    Reason       NVARCHAR(300) NULL,
-    CreatedAt    DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
-    IsAccepted   BIT NULL,
+    RecID      INT IDENTITY PRIMARY KEY,
+    StudentID  INT NOT NULL REFERENCES StudentProfiles(StudentID),
+    QuestionID INT NULL REFERENCES Questions(QuestionID),
+    ResourceID INT NULL REFERENCES LearningResources(ResourceID),
+    Reason     NVARCHAR(300) NULL,
+    CreatedAt  DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    IsAccepted BIT NULL,
     CHECK (QuestionID IS NOT NULL OR ResourceID IS NOT NULL)
 );
 
 CREATE TABLE ScorePredictions (
-    PredictionID  INT IDENTITY PRIMARY KEY,
-    StudentID     INT NOT NULL REFERENCES StudentProfiles(StudentID),
-    PredictedScore DECIMAL(6,2) NOT NULL,
+    PredictionID    INT IDENTITY PRIMARY KEY,
+    StudentID       INT NOT NULL REFERENCES StudentProfiles(StudentID),
+    PredictedScore  DECIMAL(6,2) NOT NULL CHECK (PredictedScore BETWEEN 0 AND 1200),
     ProbReachTarget DECIMAL(5,4) NOT NULL CHECK (ProbReachTarget BETWEEN 0 AND 1),
-    RiskNote      NVARCHAR(300) NULL,
-    PredictedAt   DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+    RiskNote        NVARCHAR(300) NULL,
+    PredictedAt     DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
 
 /* ===== 5. AI TUTOR ===== */
@@ -202,105 +229,29 @@ CREATE TABLE SystemSettings (
 );
 
 CREATE TABLE AuditLog (
-    AuditID    BIGINT IDENTITY PRIMARY KEY,
-    TableName  SYSNAME NOT NULL,
-    Action     VARCHAR(10) NOT NULL,
-    RecordKey  NVARCHAR(100) NULL,
-    ChangedBy  SYSNAME NOT NULL DEFAULT SUSER_SNAME(),
-    ChangedAt  DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+    AuditID   BIGINT IDENTITY PRIMARY KEY,
+    TableName SYSNAME NOT NULL,
+    Action    VARCHAR(10) NOT NULL CHECK (Action IN ('INSERT','UPDATE','DELETE')),
+    RecordKey NVARCHAR(100) NULL,
+    ChangedBy SYSNAME NOT NULL DEFAULT SUSER_SNAME(),
+    ChangedAt DATETIME2 NOT NULL DEFAULT SYSDATETIME()
 );
 GO
 
-/* ===== 7. RÀNG BUỘC VÀ INDEX PHỤC VỤ TRUY VẤN ===== */
+/* ===== 6b. THÔNG BÁO ===== */
+CREATE TABLE Notifications (
+    NotificationID BIGINT IDENTITY PRIMARY KEY,
+    UserID         INT NOT NULL REFERENCES Users(UserID),             
+    StudentID      INT NULL REFERENCES StudentProfiles(StudentID),     
+    NotifyType     VARCHAR(20) NOT NULL
+                   CHECK (NotifyType IN ('INACTIVITY','BEHIND_SCHEDULE','LOW_PROBABILITY')),
+    Message        NVARCHAR(500) NOT NULL,
+    IsRead         BIT NOT NULL DEFAULT 0,
+    CreatedAt      DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+);
+GO
+
 CREATE UNIQUE NONCLUSTERED INDEX UX_LearningPaths_Student_Active
     ON LearningPaths(StudentID)
     WHERE Status = 'ACTIVE';
-
-CREATE NONCLUSTERED INDEX IX_LearningPaths_Student_GeneratedAt
-    ON LearningPaths(StudentID, GeneratedAt DESC)
-    INCLUDE (StartDate, EndDate, Status);
-
-CREATE NONCLUSTERED INDEX IX_LearningPathItems_Path_Date_Status
-    ON LearningPathItems(PathID, ScheduledDate, Status)
-    INCLUDE (CompetencyID, ResourceID, Priority);
-
-CREATE NONCLUSTERED INDEX IX_LearningResources_Competency
-    ON LearningResources(CompetencyID)
-    INCLUDE (Title, ResourceType, EstimatedMin);
-
-CREATE NONCLUSTERED INDEX IX_Questions_Competency_Approved_Difficulty
-    ON Questions(CompetencyID, IsApproved, Difficulty)
-    INCLUDE (IsAIGenerated, CreatedAt);
-
-CREATE NONCLUSTERED INDEX IX_ExamAttempts_Student_StartedAt
-    ON ExamAttempts(StudentID, StartedAt DESC)
-    INCLUDE (ExamID, SubmittedAt, Score);
-
-CREATE NONCLUSTERED INDEX IX_ExamAttempts_Exam_Student
-    ON ExamAttempts(ExamID, StudentID, StartedAt DESC)
-    INCLUDE (SubmittedAt, Score);
-
-CREATE NONCLUSTERED INDEX IX_ExamQuestions_Question
-    ON ExamQuestions(QuestionID, ExamID)
-    INCLUDE (OrderNo);
-
-CREATE NONCLUSTERED INDEX IX_StudentCompetency_Competency
-    ON StudentCompetency(CompetencyID, StudentID)
-    INCLUDE (Mastery, AttemptCount, UpdatedAt);
-
-CREATE NONCLUSTERED INDEX IX_StudyLogs_Student_LoggedAt
-    ON StudyLogs(StudentID, LoggedAt DESC)
-    INCLUDE (ActivityType, DurationMin);
-
-CREATE NONCLUSTERED INDEX IX_TutorSessions_Student_StartedAt
-    ON TutorSessions(StudentID, StartedAt DESC);
-
-CREATE NONCLUSTERED INDEX IX_TutorMessages_Session_SentAt
-    ON TutorMessages(SessionID, SentAt)
-    INCLUDE (Sender, QuestionID);
-
-CREATE NONCLUSTERED INDEX IX_Recommendations_Student_CreatedAt
-    ON Recommendations(StudentID, CreatedAt DESC)
-    INCLUDE (QuestionID, ResourceID, IsAccepted);
-GO
-
-CREATE TRIGGER TR_LearningPathItems_ValidateSchedule
-ON LearningPathItems
-AFTER INSERT, UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    IF EXISTS (
-        SELECT 1
-        FROM inserted AS i
-        INNER JOIN LearningPaths AS p ON p.PathID = i.PathID
-        WHERE i.ScheduledDate < p.StartDate
-           OR i.ScheduledDate > p.EndDate
-    )
-    BEGIN
-        ;THROW 51000, 'ScheduledDate must be within the learning path date range.', 1;
-    END;
-END;
-GO
-
-CREATE TRIGGER TR_LearningPaths_ValidateDateRange
-ON LearningPaths
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    IF (UPDATE(StartDate) OR UPDATE(EndDate))
-       AND EXISTS (
-            SELECT 1
-            FROM inserted AS p
-            INNER JOIN LearningPathItems AS i ON i.PathID = p.PathID
-            WHERE i.ScheduledDate < p.StartDate
-               OR i.ScheduledDate > p.EndDate
-       )
-    BEGIN
-        ;THROW 51001, 'The learning path date range cannot exclude a scheduled item.', 1;
-    END;
-END;
 GO
