@@ -102,9 +102,9 @@ BEGIN TRY
     DECLARE @AttemptID INT = SCOPE_IDENTITY();
 
     -- Điền đáp án (Đúng câu 1, sai câu 2)
-    INSERT INTO AttemptAnswers (AttemptID, QuestionID, SelectedOption, IsCorrect, TimeSpentSec) VALUES 
-    (@AttemptID, @Q1ID, (SELECT OptionID FROM QuestionOptions WHERE QuestionID = @Q1ID AND OptionText = '42'), 1, 45),
-    (@AttemptID, @Q2ID, (SELECT OptionID FROM QuestionOptions WHERE QuestionID = @Q2ID AND OptionText = '3'), 0, 60);
+    INSERT INTO AttemptAnswers (AttemptID, ExamID, QuestionID, SelectedOption, IsCorrect, TimeSpentSec) VALUES
+    (@AttemptID, @ExamID, @Q1ID, (SELECT OptionID FROM QuestionOptions WHERE QuestionID = @Q1ID AND OptionText = '42'), 1, 45),
+    (@AttemptID, @ExamID, @Q2ID, (SELECT OptionID FROM QuestionOptions WHERE QuestionID = @Q2ID AND OptionText = '3'), 0, 60);
 
     /* ===== 7. CÁ NHÂN HÓA & AI ===== */
     -- Cập nhật hồ sơ năng lực
