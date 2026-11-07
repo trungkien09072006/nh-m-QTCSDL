@@ -10,17 +10,18 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <a class="brand" href="#tong-quan" aria-label="NovaPath, về tổng quan">
+      <a class="brand" href="{{ url_for('dashboard') }}" aria-label="NovaPath, về tổng quan">
         <span class="brand-mark">N</span>
         <span class="brand-name">nova<span>path</span><small>HỌC THÔNG MINH, THI TỰ TIN</small></span>
       </a>
 
       <p class="nav-caption">KHÔNG GIAN HỌC TẬP</p>
       <nav class="main-nav" aria-label="Điều hướng chính">
-        <a class="nav-link active" href="#tong-quan"><span class="nav-icon">⌂</span>Tổng quan</a>
+        <a class="nav-link active" href="{{ url_for('dashboard') }}"><span class="nav-icon">⌂</span>Tổng quan</a>
         <a class="nav-link" href="#lo-trinh"><span class="nav-icon">◷</span>Lộ trình học</a>
         <a class="nav-link" href="#nang-luc"><span class="nav-icon">▤</span>Năng lực</a>
         <a class="nav-link" href="#de-thi"><span class="nav-icon">✎</span>Luyện đề</a>
+        <a class="nav-link" href="{{ url_for('profile') }}"><span class="nav-icon">👤</span>Hồ sơ của tôi</a>
       </nav>
 
       <div class="sidebar-bottom">
@@ -29,9 +30,12 @@
           <p><strong>Học theo cách của bạn</strong><br>NovaPath đang từng bước cá nhân hóa hành trình ĐGNL.</p>
         </div>
         <div class="sidebar-user">
-          <span class="avatar">{{ dashboard.student.FullName[:1] if dashboard and dashboard.student else "N" }}</span>
-          <span><strong>{{ dashboard.student.FullName if dashboard and dashboard.student else "Học sinh" }}</strong><small>Học viên NovaPath</small></span>
-          <span class="user-menu" aria-hidden="true">···</span>
+          <span class="avatar">{{ session.get('fullname', 'N')[:1] }}</span>
+          <span><strong>{{ session.get('fullname', 'Học sinh') }}</strong><small>Vai trò: {{ session.get('role', 'Học viên') }}</small></span>
+          <form method="POST" action="{{ url_for('logout') }}" class="logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="user-menu" title="Đăng xuất" aria-label="Đăng xuất">🚪</button>
+          </form>
         </div>
       </div>
     </aside>
@@ -54,14 +58,14 @@
         {% elif dashboard and not dashboard.student %}
         <section class="notice notice-warning" role="status">
           <span class="notice-icon">i</span>
-          <div><strong>Chưa tìm thấy hồ sơ học sinh</strong><p>Không có tài khoản học sinh hoạt động với email <code>{{ student_email }}</code>. Hãy kiểm tra dữ liệu mẫu hoặc biến STUDENT_EMAIL.</p></div>
+          <div><strong>Chưa tìm thấy hồ sơ chi tiết</strong><p>Hồ sơ năng lực chưa hoàn thiện, hãy cập nhật tại trang Hồ sơ.</p></div>
         </section>
         {% endif %}
 
         <section class="welcome-row">
           <div>
             <p class="eyebrow">THỨC DẬY TIỀM NĂNG CỦA BẠN</p>
-            <h1>Chào {{ dashboard.student.FullName.split()[-1] if dashboard and dashboard.student else "bạn" }} <span class="wave">✦</span></h1>
+            <h1>Chào {{ session.get('fullname', 'bạn').split()[-1] }} <span class="wave">✦</span></h1>
             <p class="welcome-copy">Mỗi ngày một bước nhỏ, gần hơn với mục tiêu ĐGNL của bạn.</p>
           </div>
           <div class="target-card">

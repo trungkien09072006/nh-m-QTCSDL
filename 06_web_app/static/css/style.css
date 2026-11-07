@@ -100,6 +100,9 @@ a { color: inherit; text-decoration: none; }
 .sidebar-user strong { font-size: 11px; }
 .sidebar-user small { margin-top: 3px; color: #9aa4b4; font-size: 10px; }
 .user-menu { margin-left: auto; color: #8d98a9; font-size: 21px; letter-spacing: 1px; }
+.logout-form { display: flex; margin: 0; }
+.logout-form button { padding: 0; border: 0; background: transparent; cursor: pointer; font-family: inherit; }
+.logout-form .text-link { padding: 0; }
 
 .main-content { min-height: 100vh; margin-left: 248px; }
 .topbar { display: flex; height: 68px; align-items: center; justify-content: space-between; padding: 0 5.2%; border-bottom: 1px solid var(--line); background: #fff; }
@@ -164,7 +167,7 @@ h2 { margin-bottom: 0; color: #2c3548; font-family: Manrope, "Segoe UI", sans-se
 .recommendation-card { display: flex; gap: 10px; padding: 11px; border: 1px solid #f0edfa; border-radius: 9px; background: #fff; }
 .recommendation-icon { display: grid; width: 25px; height: 25px; flex: 0 0 25px; place-items: center; border-radius: 7px; background: #f0edff; color: #7564de; font-size: 14px; }
 .recommendation-card strong { display: block; color: #454c5e; font-size: 10px; line-height: 1.45; }
-.recommendation-card p { display: -webkit-box; margin: 4px 0 0; overflow: hidden; color: #929bad; font-size: 9px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.recommendation-card p { display: -webkit-box; margin: 4px 0 0; overflow: hidden; color: #929bad; font-size: 9px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .ai-disclaimer { margin: 12px 0 0; color: #9ba4b3; font-size: 9px; }
 .ai-disclaimer span { margin-right: 4px; color: #8e7ae9; }
 
@@ -260,4 +263,97 @@ h2 { margin-bottom: 0; color: #2c3548; font-family: Manrope, "Segoe UI", sans-se
   .panel { padding: 16px 14px; }
   .panel-heading { align-items: flex-end; }
   .muted-label { max-width: 110px; text-align: right; }
+}
+
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--canvas);
+}
+.auth-container {
+  width: 100%;
+  max-width: 380px;
+  padding: 40px 30px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(32, 42, 59, 0.05);
+  text-align: center;
+  border: 1px solid var(--line);
+}
+.auth-container h2 {
+  margin: 15px 0 25px;
+  color: #252e40;
+}
+.auth-container .brand-name {
+  font-size: 28px;
+  margin-bottom: 0;
+}
+.form-group {
+  margin-bottom: 18px;
+  text-align: left;
+}
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: #586276;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.form-control {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dce0e8;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #2c3548;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-control:focus {
+  outline: none;
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px #f0edff;
+}
+.btn-primary {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  background: var(--purple);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+.btn-primary:hover {
+  background: var(--purple-dark);
+}
+.btn-primary:active {
+  transform: scale(0.98);
+}
+.auth-footer {
+  margin-top: 20px;
+  font-size: 12px;
+  color: #7b8498;
+}
+.auth-footer a {
+  color: var(--purple);
+  font-weight: 700;
+}
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+.notice-success {
+  border-color: #d1f4e5;
+  background: #f0fdf7;
+  color: #1e704e;
+}
+.notice-success .notice-icon {
+  background: #d1f4e5;
+  color: #1a6344;
 }
