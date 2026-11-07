@@ -1,0 +1,56 @@
+USE AILearningDB;
+GO
+
+/* ===== 7. INDEX ===== */
+
+CREATE NONCLUSTERED INDEX IX_LearningPaths_Student_GeneratedAt
+    ON LearningPaths(StudentID, GeneratedAt DESC)
+    INCLUDE (StartDate, EndDate, Status);
+
+CREATE NONCLUSTERED INDEX IX_LearningPathItems_Path_Date_Status
+    ON LearningPathItems(PathID, ScheduledDate, Status)
+    INCLUDE (CompetencyID, ResourceID, Priority);
+
+CREATE NONCLUSTERED INDEX IX_LearningResources_Competency
+    ON LearningResources(CompetencyID)
+    INCLUDE (Title, ResourceType, EstimatedMin);
+
+CREATE NONCLUSTERED INDEX IX_Questions_Competency_Approved_Difficulty
+    ON Questions(CompetencyID, IsApproved, Difficulty)
+    INCLUDE (IsAIGenerated, CreatedAt);
+
+CREATE NONCLUSTERED INDEX IX_ExamAttempts_Student_StartedAt
+    ON ExamAttempts(StudentID, StartedAt DESC)
+    INCLUDE (ExamID, SubmittedAt, Score);
+
+CREATE NONCLUSTERED INDEX IX_ExamAttempts_Exam_Student
+    ON ExamAttempts(ExamID, StudentID, StartedAt DESC)
+    INCLUDE (SubmittedAt, Score);
+
+CREATE NONCLUSTERED INDEX IX_ExamQuestions_Question
+    ON ExamQuestions(QuestionID, ExamID)
+    INCLUDE (OrderNo);
+
+CREATE NONCLUSTERED INDEX IX_StudentCompetency_Competency
+    ON StudentCompetency(CompetencyID, StudentID)
+    INCLUDE (Mastery, AttemptCount, UpdatedAt);
+
+CREATE NONCLUSTERED INDEX IX_StudyLogs_Student_LoggedAt
+    ON StudyLogs(StudentID, LoggedAt DESC)
+    INCLUDE (ActivityType, DurationMin);
+
+CREATE NONCLUSTERED INDEX IX_TutorSessions_Student_StartedAt
+    ON TutorSessions(StudentID, StartedAt DESC);
+
+CREATE NONCLUSTERED INDEX IX_TutorMessages_Session_SentAt
+    ON TutorMessages(SessionID, SentAt)
+    INCLUDE (Sender, QuestionID);
+
+CREATE NONCLUSTERED INDEX IX_Recommendations_Student_CreatedAt
+    ON Recommendations(StudentID, CreatedAt DESC)
+    INCLUDE (QuestionID, ResourceID, IsAccepted);
+
+CREATE NONCLUSTERED INDEX IX_Notifications_User_Unread
+    ON Notifications(UserID, IsRead, CreatedAt DESC)
+    INCLUDE (StudentID, NotifyType);
+GO
