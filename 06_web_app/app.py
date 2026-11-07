@@ -1,34 +1,4 @@
 import os
-<<<<<<< HEAD
-from datetime import datetime
-
-import pyodbc
-from flask import Flask, redirect, render_template, request, url_for
-
-from database import (
-    ask_ai_tutor,
-    load_dashboard_data,
-    mark_notifications_read,
-    refresh_ai_insights,
-    respond_to_recommendation,
-)
-
-
-app = Flask(__name__)
-
-
-def _current_student_email() -> str:
-    return os.getenv("STUDENT_EMAIL", "student1@gmail.com")
-
-
-@app.get("/")
-def dashboard():
-    student_email = _current_student_email()
-    current_date = datetime.now().strftime("%d/%m/%Y")
-
-    try:
-        data = load_dashboard_data(student_email)
-=======
 import secrets
 import hmac
 from datetime import datetime
@@ -45,7 +15,10 @@ from database import (
     verify_login,
 )
 
+from content import bp as content_bp
+
 app = Flask(__name__)
+app.register_blueprint(content_bp)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -109,6 +82,8 @@ def login():
             session['fullname'] = user['FullName']
             session['role'] = user['RoleName']
 
+            if user['RoleName'] in ('Teacher', 'Admin'):
+                return redirect(url_for('content.listing'))
             if user['RoleName'] == 'Student':
                 return redirect(url_for('dashboard'))
             else:
@@ -162,17 +137,12 @@ def dashboard():
 
     try:
         data = load_dashboard_data(user_id)
->>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
     except (pyodbc.Error, ValueError):
         app.logger.exception("Không thể tải dashboard NovaPath từ SQL Server")
         return (
             render_template(
                 "dashboard.html",
                 dashboard=None,
-<<<<<<< HEAD
-                student_email=student_email,
-=======
->>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
                 current_date=current_date,
                 db_error=(
                     "Không thể kết nối SQL Server. Hãy kiểm tra cấu hình kết nối, "
@@ -185,63 +155,11 @@ def dashboard():
     return render_template(
         "dashboard.html",
         dashboard=data,
-<<<<<<< HEAD
-        student_email=student_email,
-=======
->>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
         current_date=current_date,
         db_error=None,
     )
 
 
-<<<<<<< HEAD
-@app.post("/ai/refresh")
-def trigger_ai_refresh():
-    student_email = _current_student_email()
-    try:
-        refresh_ai_insights(student_email)
-    except (pyodbc.Error, ValueError):
-        app.logger.exception("Không thể cập nhật phân tích AI")
-    return redirect(url_for("dashboard") + "#goi-y")
-
-
-@app.post("/recommendations/<int:rec_id>/respond")
-def handle_recommendation_response(rec_id: int):
-    student_email = _current_student_email()
-    action = request.form.get("action", "accept")
-    accepted = action == "accept"
-    try:
-        respond_to_recommendation(student_email, rec_id, accepted)
-    except (pyodbc.Error, ValueError):
-        app.logger.exception("Không thể cập nhật trạng thái gợi ý")
-    return redirect(url_for("dashboard") + "#goi-y")
-
-
-@app.post("/tutor/ask")
-def handle_tutor_question():
-    student_email = _current_student_email()
-    message_content = request.form.get("message", "")
-    raw_question_id = request.form.get("question_id", "").strip()
-    question_id = int(raw_question_id) if raw_question_id.isdigit() else None
-
-    try:
-        ask_ai_tutor(student_email, message_content, question_id)
-    except (pyodbc.Error, ValueError):
-        app.logger.exception("Không thể gửi câu hỏi tới AI Tutor")
-    return redirect(url_for("dashboard") + "#tro-ly-ai")
-
-
-@app.post("/notifications/read")
-def handle_notifications_read():
-    student_email = _current_student_email()
-    raw_id = request.form.get("notification_id", "").strip()
-    notification_id = int(raw_id) if raw_id.isdigit() else None
-    try:
-        mark_notifications_read(student_email, notification_id)
-    except (pyodbc.Error, ValueError):
-        app.logger.exception("Không thể cập nhật trạng thái thông báo")
-    return redirect(url_for("dashboard") + "#thong-bao")
-=======
 @app.route("/profile", methods=["GET", "POST"])
 @login_required
 @role_required("Student")
@@ -288,7 +206,6 @@ def profile():
 
     user_profile = get_student_profile(user_id)
     return render_template("profile.html", profile=user_profile)
->>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
 
 
 if __name__ == "__main__":
@@ -296,8 +213,4 @@ if __name__ == "__main__":
         host="127.0.0.1",
         port=int(os.getenv("PORT", "5000")),
         debug=os.getenv("FLASK_DEBUG", "").lower() == "true",
-<<<<<<< HEAD
     )
-=======
-    )
->>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
