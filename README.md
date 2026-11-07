@@ -1,6 +1,10 @@
 # NovaPath
 
+<<<<<<< HEAD
 NovaPath là giao diện web Python bước đầu cho đề tài **Hệ thống cá nhân hóa lộ trình học và luyện thi Đánh giá năng lực tích hợp AI**. Dashboard hiển thị hồ sơ học sinh, thời gian học, điểm thi gần nhất, dự đoán điểm, năng lực, lộ trình và gợi ý được lưu trong SQL Server. Đây là phiên bản nền tảng; chưa có đăng nhập, làm bài thi hay dịch vụ AI trực tiếp.
+=======
+NovaPath là ứng dụng web Python bước đầu cho đề tài **Hệ thống cá nhân hóa lộ trình học và luyện thi Đánh giá năng lực tích hợp AI**. Ứng dụng hiện có đăng ký/đăng nhập, hồ sơ học sinh và dashboard hiển thị dữ liệu học tập từ SQL Server. Chức năng làm bài thi và dịch vụ AI trực tiếp chưa được triển khai.
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
 
 ## Yêu cầu
 
@@ -25,6 +29,7 @@ $env:SQL_SERVER = "localhost\SQLEXPRESS"
 $env:SQL_DATABASE = "AILearningDB"
 $env:SQL_DRIVER = "ODBC Driver 17 for SQL Server"
 $env:SQL_TRUSTED_CONNECTION = "true"
+<<<<<<< HEAD
 $env:STUDENT_EMAIL = "student1@gmail.com"
 python .\06_web_app\app.py
 ```
@@ -32,6 +37,17 @@ python .\06_web_app\app.py
 Mở <http://127.0.0.1:5000>. Mặc định ứng dụng dùng Windows Authentication và hồ sơ mẫu `student1@gmail.com`. Để dùng SQL Server Authentication, đặt `SQL_TRUSTED_CONNECTION` thành `false`, sau đó cung cấp `SQL_USERNAME` và `SQL_PASSWORD` qua biến môi trường; không lưu mật khẩu vào mã nguồn.
 
 Khi SQL Server chưa kết nối được, trang sẽ báo trạng thái lỗi và ứng dụng ghi chi tiết vào terminal. Nếu không tìm thấy hồ sơ, hãy kiểm tra `STUDENT_EMAIL` và dữ liệu trong bảng `Users`/`StudentProfiles`.
+=======
+$env:FLASK_SECRET_KEY = (python -c "import secrets; print(secrets.token_hex(32))")
+python .\06_web_app\app.py
+```
+
+Mở <http://127.0.0.1:5000/login> để đăng nhập hoặc chọn đăng ký. Tài khoản học sinh mẫu là `student1@gmail.com` hoặc `student2@gmail.com`, mật khẩu `123456`. Mặc định ứng dụng dùng Windows Authentication tới SQL Server Express. Để dùng SQL Server Authentication, đặt `SQL_TRUSTED_CONNECTION` thành `false`, sau đó cung cấp `SQL_USERNAME` và `SQL_PASSWORD` qua biến môi trường; không lưu mật khẩu vào mã nguồn.
+
+Lệnh trên tạo `FLASK_SECRET_KEY` ngẫu nhiên cho phiên PowerShell hiện tại. Nếu bỏ qua, ứng dụng tự tạo khóa tạm mới mỗi lần khởi động (các phiên đăng nhập cũ sẽ hết hiệu lực); khi triển khai, hãy cấu hình một khóa bí mật ổn định. Các biểu mẫu POST có CSRF token. Tài khoản mẫu dùng SHA-256 để tương thích dữ liệu seed cũ; sau lần đăng nhập thành công, ứng dụng tự nâng cấp hash mật khẩu đó. Tài khoản đăng ký mới dùng scrypt.
+
+Khi SQL Server chưa kết nối được, trang sẽ báo trạng thái lỗi và ứng dụng ghi chi tiết vào terminal. Nếu không tìm thấy hồ sơ, hãy kiểm tra tài khoản đã đăng nhập và dữ liệu trong bảng `Users`/`StudentProfiles`.
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
 
 ## Cấu trúc dự án
 

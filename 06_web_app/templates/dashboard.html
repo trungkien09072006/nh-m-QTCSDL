@@ -10,19 +10,31 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
+<<<<<<< HEAD
       <a class="brand" href="#tong-quan" aria-label="NovaPath, về tổng quan">
+=======
+      <a class="brand" href="{{ url_for('dashboard') }}" aria-label="NovaPath, về tổng quan">
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
         <span class="brand-mark">N</span>
         <span class="brand-name">nova<span>path</span><small>HỌC THÔNG MINH, THI TỰ TIN</small></span>
       </a>
 
       <p class="nav-caption">KHÔNG GIAN HỌC TẬP</p>
       <nav class="main-nav" aria-label="Điều hướng chính">
+<<<<<<< HEAD
         <a class="nav-link active" href="#tong-quan"><span class="nav-icon">⌂</span>Tổng quan</a>
         <a class="nav-link" href="#lo-trinh"><span class="nav-icon">◷</span>Lộ trình học</a>
         <a class="nav-link" href="#goi-y"><span class="nav-icon">✧</span>Gợi ý AI</a>
         <a class="nav-link" href="#tro-ly-ai"><span class="nav-icon">💬</span>Trợ lý hỏi đáp</a>
         <a class="nav-link" href="#nang-luc"><span class="nav-icon">▤</span>Năng lực</a>
         <a class="nav-link" href="#de-thi"><span class="nav-icon">✎</span>Luyện đề</a>
+=======
+        <a class="nav-link active" href="{{ url_for('dashboard') }}"><span class="nav-icon">⌂</span>Tổng quan</a>
+        <a class="nav-link" href="#lo-trinh"><span class="nav-icon">◷</span>Lộ trình học</a>
+        <a class="nav-link" href="#nang-luc"><span class="nav-icon">▤</span>Năng lực</a>
+        <a class="nav-link" href="#de-thi"><span class="nav-icon">✎</span>Luyện đề</a>
+        <a class="nav-link" href="{{ url_for('profile') }}"><span class="nav-icon">👤</span>Hồ sơ của tôi</a>
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
       </nav>
 
       <div class="sidebar-bottom">
@@ -31,9 +43,18 @@
           <p><strong>Học theo cách của bạn</strong><br>NovaPath đang từng bước cá nhân hóa hành trình ĐGNL.</p>
         </div>
         <div class="sidebar-user">
+<<<<<<< HEAD
           <span class="avatar">{{ dashboard.student.FullName[:1] if dashboard and dashboard.student else "N" }}</span>
           <span><strong>{{ dashboard.student.FullName if dashboard and dashboard.student else "Học sinh" }}</strong><small>Học viên NovaPath</small></span>
           <span class="user-menu" aria-hidden="true">···</span>
+=======
+          <span class="avatar">{{ session.get('fullname', 'N')[:1] }}</span>
+          <span><strong>{{ session.get('fullname', 'Học sinh') }}</strong><small>Vai trò: {{ session.get('role', 'Học viên') }}</small></span>
+          <form method="POST" action="{{ url_for('logout') }}" class="logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="user-menu" title="Đăng xuất" aria-label="Đăng xuất">🚪</button>
+          </form>
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
         </div>
       </div>
     </aside>
@@ -42,6 +63,7 @@
       <header class="topbar">
         <div class="breadcrumb">Không gian học tập <span>/</span> <strong>Tổng quan</strong></div>
         <div class="topbar-right">
+<<<<<<< HEAD
           <form action="{{ url_for('trigger_ai_refresh') }}" method="post" class="inline-form">
             <button type="submit" class="btn-subtle">✦ Phân tích & Cập nhật AI</button>
           </form>
@@ -53,6 +75,10 @@
             <span class="notif-badge">{{ dashboard.unread_notification_count }}</span>
             {% endif %}
           </a>
+=======
+          <span class="today">{{ current_date if current_date else "" }}</span>
+          <span class="notification" aria-label="Thông báo">♧<i></i></span>
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
         </div>
       </header>
 
@@ -65,14 +91,22 @@
         {% elif dashboard and not dashboard.student %}
         <section class="notice notice-warning" role="status">
           <span class="notice-icon">i</span>
+<<<<<<< HEAD
           <div><strong>Chưa tìm thấy hồ sơ học sinh</strong><p>Không có tài khoản học sinh hoạt động với email <code>{{ student_email }}</code>. Hãy kiểm tra dữ liệu mẫu hoặc biến STUDENT_EMAIL.</p></div>
+=======
+          <div><strong>Chưa tìm thấy hồ sơ chi tiết</strong><p>Hồ sơ năng lực chưa hoàn thiện, hãy cập nhật tại trang Hồ sơ.</p></div>
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
         </section>
         {% endif %}
 
         <section class="welcome-row">
           <div>
             <p class="eyebrow">THỨC DẬY TIỀM NĂNG CỦA BẠN</p>
+<<<<<<< HEAD
             <h1>Chào {{ dashboard.student.FullName.split()[-1] if dashboard and dashboard.student else "bạn" }} <span class="wave">✦</span></h1>
+=======
+            <h1>Chào {{ session.get('fullname', 'bạn').split()[-1] }} <span class="wave">✦</span></h1>
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
             <p class="welcome-copy">Mỗi ngày một bước nhỏ, gần hơn với mục tiêu ĐGNL của bạn.</p>
           </div>
           <div class="target-card">
@@ -84,6 +118,7 @@
           </div>
         </section>
 
+<<<<<<< HEAD
         {% if dashboard and dashboard.notifications %}
         <section class="panel notification-panel" id="thong-bao" aria-label="Thông báo học tập">
           <div class="panel-heading">
@@ -121,6 +156,8 @@
         </section>
         {% endif %}
 
+=======
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
         <section class="stats-grid" aria-label="Tổng quan tiến độ">
           <article class="stat-card">
             <div class="stat-top"><span class="stat-icon mint">◷</span><span class="stat-label">Thời gian học tuần này</span></div>
@@ -136,9 +173,12 @@
             <div class="stat-top"><span class="stat-icon peach">✦</span><span class="stat-label">Dự đoán từ AI</span></div>
             <strong class="stat-value">{{ "%.0f"|format(dashboard.prediction.score) if dashboard and dashboard.prediction else "—" }}<small> điểm</small></strong>
             <span class="stat-foot">{% if dashboard and dashboard.prediction %}Khả năng đạt mục tiêu {{ "%.0f"|format(dashboard.prediction.probability * 100) }}%{% else %}Chưa có dữ liệu dự đoán{% endif %}</span>
+<<<<<<< HEAD
             {% if dashboard and dashboard.prediction and dashboard.prediction.risk_note %}
             <p class="prediction-risk">{{ dashboard.prediction.risk_note }}</p>
             {% endif %}
+=======
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
           </article>
         </section>
 
@@ -166,18 +206,26 @@
             {% endif %}
           </section>
 
+<<<<<<< HEAD
           <section class="panel recommendation-panel" id="goi-y">
             <div class="panel-heading">
               <div><p class="eyebrow">GỢI Ý CÁ NHÂN HÓA</p><h2>Tiếp theo nên học gì?</h2></div>
               <form action="{{ url_for('trigger_ai_refresh') }}" method="post">
                 <button type="submit" class="btn-link" title="Phân tích lại điểm yếu từ dữ liệu">↻ Làm mới gợi ý</button>
               </form>
+=======
+          <section class="panel recommendation-panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">GỢI Ý CÁ NHÂN HÓA</p><h2>Tiếp theo nên học gì?</h2></div>
+              <span class="sparkle">✦</span>
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
             </div>
             {% if dashboard and dashboard.recommendations %}
             <div class="recommendation-list">
               {% for item in dashboard.recommendations %}
               <article class="recommendation-card">
                 <span class="recommendation-icon">✧</span>
+<<<<<<< HEAD
                 <div class="recommendation-body">
                   <div class="rec-header">
                     <strong>{{ item.ResourceTitle or "Ôn tập câu hỏi hay sai" }}</strong>
@@ -202,10 +250,14 @@
                     {% endif %}
                   </div>
                 </div>
+=======
+                <div><strong>{{ item.ResourceTitle or "Bài luyện tập gợi ý" }}</strong><p>{{ item.Reason or item.QuestionContent or "Ôn tập thêm để củng cố kiến thức." }}</p></div>
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
               </article>
               {% endfor %}
             </div>
             {% else %}
+<<<<<<< HEAD
             <div class="empty-state compact"><span>✧</span><strong>Chưa có gợi ý mới</strong><p>Bấm "Làm mới gợi ý" để hệ thống phân tích điểm yếu từ kết quả học tập của bạn.</p></div>
             {% endif %}
             <p class="ai-disclaimer"><span>✦</span> Giải thích được trích xuất trực tiếp từ mức độ thành thạo (Mastery) và lịch sử làm bài.</p>
@@ -268,6 +320,14 @@
           </form>
         </section>
 
+=======
+            <div class="empty-state compact"><span>✧</span><strong>Chưa có gợi ý mới</strong><p>Gợi ý sẽ được cập nhật theo kết quả học tập của bạn.</p></div>
+            {% endif %}
+            <p class="ai-disclaimer"><span>✦</span> Gợi ý dựa trên hồ sơ học tập trong hệ thống.</p>
+          </section>
+        </div>
+
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
         <section class="panel competency-panel" id="nang-luc">
           <div class="panel-heading">
             <div><p class="eyebrow">HỒ SƠ NĂNG LỰC</p><h2>Các chủ đề của bạn</h2></div>

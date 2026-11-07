@@ -1,8 +1,17 @@
+<<<<<<< HEAD
+=======
+import hashlib
+import hmac
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
 import os
 from contextlib import closing
 from datetime import date, datetime
 
 import pyodbc
+<<<<<<< HEAD
+=======
+from werkzeug.security import check_password_hash, generate_password_hash
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
 
 
 def _odbc_value(value: str) -> str:
@@ -58,6 +67,7 @@ def _display_date(value):
     return value
 
 
+<<<<<<< HEAD
 def _display_datetime(value):
     if isinstance(value, datetime):
         return value.strftime("%H:%M %d/%m/%Y")
@@ -66,11 +76,14 @@ def _display_datetime(value):
     return value
 
 
+=======
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
 def _fetch_all(cursor, query, parameters=()):
     cursor.execute(query, parameters)
     return [_row_as_dict(cursor, row) for row in cursor.fetchall()]
 
 
+<<<<<<< HEAD
 def _get_active_student(cursor, student_email: str):
     cursor.execute(
         """
@@ -94,6 +107,134 @@ def load_dashboard_data(student_email: str) -> dict:
     with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
         with closing(connection.cursor()) as cursor:
             student = _get_active_student(cursor, student_email)
+=======
+def _hash_password(password: str) -> bytes:
+    return generate_password_hash(password, method="scrypt").encode("utf-8")
+
+
+def _verify_password(stored_hash: bytes, password: str) -> tuple[bool, bool]:
+    stored_hash = bytes(stored_hash)
+    if len(stored_hash) == hashlib.sha256().digest_size:
+        legacy_hash = hashlib.sha256(password.encode("utf-16le")).digest()
+        return hmac.compare_digest(stored_hash, legacy_hash), True
+
+    try:
+        valid = check_password_hash(stored_hash.decode("utf-8"), password)
+    except (UnicodeDecodeError, ValueError):
+        return False, False
+    return valid, False
+
+
+def verify_login(email: str, password: str) -> dict:
+    with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute(
+                """
+                SELECT u.UserID, u.Email, u.FullName, r.RoleName, u.PasswordHash
+                FROM Users u
+                INNER JOIN Roles r ON u.RoleID = r.RoleID
+                WHERE u.Email = ? AND u.IsActive = 1
+                """,
+                (email,),
+            )
+            user = _row_as_dict(cursor, cursor.fetchone())
+            if user is None:
+                return None
+
+            valid, legacy_hash = _verify_password(user.pop("PasswordHash"), password)
+            if not valid:
+                return None
+
+            if legacy_hash:
+                cursor.execute(
+                    "UPDATE Users SET PasswordHash = ? WHERE UserID = ?",
+                    (_hash_password(password), user["UserID"]),
+                )
+                connection.commit()
+
+            return user
+
+
+def register_user(email: str, password: str, fullname: str, role_name: str = 'Student') -> bool:
+    with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
+        with closing(connection.cursor()) as cursor:
+            try:
+                cursor.execute("SELECT RoleID FROM Roles WHERE RoleName = ?", (role_name,))
+                role = cursor.fetchone()
+                if not role:
+                    return False
+
+                cursor.execute(
+                    """
+                    INSERT INTO Users (RoleID, Email, PasswordHash, FullName)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (role[0], email, _hash_password(password), fullname)
+                )
+
+                if role_name == 'Student':
+                    cursor.execute("SELECT SCOPE_IDENTITY()")
+                    user_id = cursor.fetchone()[0]
+                    cursor.execute(
+                        "INSERT INTO StudentProfiles (StudentID, TargetScore, DailyStudyMin) VALUES (?, 0, 60)",
+                        (user_id,)
+                    )
+                connection.commit()
+                return True
+            except pyodbc.IntegrityError:
+                return False
+
+
+def get_student_profile(user_id: int) -> dict:
+    with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute(
+                """
+                SELECT u.FullName, u.Phone, sp.SchoolName, sp.TargetScore, sp.ExamDate, sp.DailyStudyMin
+                FROM Users u
+                LEFT JOIN StudentProfiles sp ON u.UserID = sp.StudentID
+                WHERE u.UserID = ?
+                """,
+                (user_id,)
+            )
+            return _row_as_dict(cursor, cursor.fetchone())
+
+
+def update_student_profile(user_id: int, fullname: str, phone: str, school: str, target: int, exam_date: str, daily_min: int):
+    with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute("UPDATE Users SET FullName = ?, Phone = ? WHERE UserID = ?", (fullname, phone, user_id))
+            cursor.execute(
+                """
+                UPDATE StudentProfiles
+                SET SchoolName = ?, TargetScore = ?, ExamDate = ?, DailyStudyMin = ?
+                WHERE StudentID = ?
+                """,
+                (school, target, exam_date or None, daily_min, user_id)
+            )
+            connection.commit()
+
+
+def load_dashboard_data(user_id: int) -> dict:
+    with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute(
+                """
+                SELECT TOP 1
+                    u.UserID,
+                    u.FullName,
+                    sp.TargetScore,
+                    sp.ExamDate,
+                    sp.DailyStudyMin
+                FROM Users AS u
+                INNER JOIN Roles AS role ON role.RoleID = u.RoleID
+                INNER JOIN StudentProfiles AS sp ON sp.StudentID = u.UserID
+                WHERE u.UserID = ? AND role.RoleName = N'Student' AND u.IsActive = 1
+                """,
+                (user_id,),
+            )
+            student = _row_as_dict(cursor, cursor.fetchone())
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
 
             if student is None:
                 return {
@@ -105,6 +246,7 @@ def load_dashboard_data(student_email: str) -> dict:
                     "tasks": [],
                     "recommendations": [],
                     "exams": [],
+<<<<<<< HEAD
                     "notifications": [],
                     "unread_notification_count": 0,
                     "tutor_messages": [],
@@ -113,6 +255,10 @@ def load_dashboard_data(student_email: str) -> dict:
 
             student_id = student["UserID"]
 
+=======
+                }
+
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
             cursor.execute(
                 """
                 SELECT
@@ -139,12 +285,17 @@ def load_dashboard_data(student_email: str) -> dict:
                         SELECT TOP 1 PredictedScore
                         FROM ScorePredictions
                         WHERE StudentID = ?
+<<<<<<< HEAD
                         ORDER BY PredictedAt DESC, PredictionID DESC
+=======
+                        ORDER BY PredictedAt DESC
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
                     ) AS PredictedScore,
                     (
                         SELECT TOP 1 ProbReachTarget
                         FROM ScorePredictions
                         WHERE StudentID = ?
+<<<<<<< HEAD
                         ORDER BY PredictedAt DESC, PredictionID DESC
                     ) AS ProbReachTarget,
                     (
@@ -162,6 +313,12 @@ def load_dashboard_data(student_email: str) -> dict:
                     student_id,
                     student_id,
                 ),
+=======
+                        ORDER BY PredictedAt DESC
+                    ) AS ProbReachTarget
+                """,
+                (user_id, user_id, user_id, user_id, user_id),
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
             )
             summary = _row_as_dict(cursor, cursor.fetchone())
 
@@ -180,7 +337,11 @@ def load_dashboard_data(student_email: str) -> dict:
                    AND profile.StudentID = ?
                 ORDER BY subject.SubjectName, competency.CompetencyName
                 """,
+<<<<<<< HEAD
                 (student_id,),
+=======
+                (user_id,),
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
             )
 
             tasks = _fetch_all(
@@ -203,12 +364,17 @@ def load_dashboard_data(student_email: str) -> dict:
                   AND item.Status IN ('TODO', 'DOING')
                 ORDER BY item.ScheduledDate, item.Priority
                 """,
+<<<<<<< HEAD
                 (student_id,),
+=======
+                (user_id,),
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
             )
 
             recommendations = _fetch_all(
                 cursor,
                 """
+<<<<<<< HEAD
                 SELECT TOP 5
                     recommendation.RecID,
                     recommendation.Reason,
@@ -236,6 +402,22 @@ def load_dashboard_data(student_email: str) -> dict:
                     recommendation.CreatedAt DESC
                 """,
                 (student_id,),
+=======
+                SELECT TOP 3
+                    recommendation.Reason,
+                    resource.Title AS ResourceTitle,
+                    question.Content AS QuestionContent
+                FROM Recommendations AS recommendation
+                LEFT JOIN LearningResources AS resource
+                    ON resource.ResourceID = recommendation.ResourceID
+                LEFT JOIN Questions AS question
+                    ON question.QuestionID = recommendation.QuestionID
+                WHERE recommendation.StudentID = ?
+                  AND COALESCE(recommendation.IsAccepted, 0) = 0
+                ORDER BY recommendation.CreatedAt DESC
+                """,
+                (user_id,),
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
             )
 
             exams = _fetch_all(
@@ -252,6 +434,7 @@ def load_dashboard_data(student_email: str) -> dict:
                 GROUP BY exam.ExamID, exam.Title, exam.DurationMin, exam.ExamType,
                          exam.CreatedAt
                 ORDER BY exam.CreatedAt DESC
+<<<<<<< HEAD
                 """,
             )
 
@@ -306,6 +489,9 @@ def load_dashboard_data(student_email: str) -> dict:
                 WHERE q.IsApproved = 1
                 ORDER BY q.QuestionID ASC
                 """,
+=======
+                """
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
             )
 
     student["ExamDate"] = _display_date(student["ExamDate"])
@@ -324,7 +510,10 @@ def load_dashboard_data(student_email: str) -> dict:
             {
                 "score": summary["PredictedScore"],
                 "probability": summary["ProbReachTarget"],
+<<<<<<< HEAD
                 "risk_note": summary.get("RiskNote"),
+=======
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
             }
             if summary["PredictedScore"] is not None
             else None
@@ -336,6 +525,7 @@ def load_dashboard_data(student_email: str) -> dict:
         ],
         "recommendations": recommendations,
         "exams": exams,
+<<<<<<< HEAD
         "notifications": [
             {**item, "CreatedAt": _display_datetime(item.get("CreatedAt"))}
             for item in notifications
@@ -542,3 +732,6 @@ def mark_notifications_read(student_email: str, notification_id: int | None = No
                 )
             connection.commit()
             return True
+=======
+    }
+>>>>>>> 4d383f6c0626a0791256855f11f73109c7f517b7
