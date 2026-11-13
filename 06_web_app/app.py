@@ -1,11 +1,11 @@
 import os
 import secrets
 import hmac
-from datetime import datetime
+from datetime import date, datetime
 from functools import wraps
 
 import pyodbc
-from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 
 from database import (
     get_student_profile,
@@ -26,9 +26,9 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 @app.before_request
 def protect_post_requests():
-    if request.method == "POST":
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         expected = session.get("_csrf_token")
-        submitted = request.form.get("csrf_token", "")
+        submitted = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token", "")
         if not expected or not hmac.compare_digest(
             expected.encode("utf-8"), submitted.encode("utf-8")
         ):
@@ -37,14 +37,204 @@ def protect_post_requests():
 
 @app.context_processor
 def inject_csrf_token():
-    def csrf_token():
-        token = session.get("_csrf_token")
-        if token is None:
-            token = secrets.token_urlsafe(32)
-            session["_csrf_token"] = token
-        return token
+    return {"csrf_token": _csrf_token}
 
-    return {"csrf_token": csrf_token}
+
+def _csrf_token():
+    token = session.get("_csrf_token")
+    if token is None:
+        token = secrets.token_urlsafe(32)
+        session["_csrf_token"] = token
+    return token
+
+
+def _api_user():
+    if "user_id" not in session:
+        return None, (jsonify(error="Vui lòng đăng nhập."), 401)
+    if session.get("role") != "Student":
+        return None, (jsonify(error="Ứng dụng Vite hiện hỗ trợ tài khoản học sinh."), 403)
+    return {
+        "id": session["user_id"],
+        "email": session.get("email"),
+        "fullname": session.get("fullname"),
+        "role": session.get("role"),
+    }, None
+
+
+@app.get("/api/csrf-token")
+def api_csrf_token():
+    return jsonify(csrf_token=_csrf_token())
+
+
+@app.get("/api/session")
+def api_session():
+    if "user_id" not in session:
+        return jsonify(user=None)
+    return jsonify(
+        user={
+            "id": session["user_id"],
+            "email": session.get("email"),
+            "fullname": session.get("fullname"),
+            "role": session.get("role"),
+        }
+    )
+
+
+@app.post("/api/login")
+def api_login():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="Dữ liệu đăng nhập không hợp lệ."), 400
+    email = data.get("email")
+    password = data.get("password")
+    if not isinstance(email, str) or not isinstance(password, str):
+        return jsonify(error="Vui lòng nhập email và mật khẩu hợp lệ."), 400
+    try:
+        user = verify_login(email.strip(), password)
+    except pyodbc.Error:
+        app.logger.exception("Không thể xác thực NovaPath qua Vite API")
+        return jsonify(error="Không thể kết nối SQL Server để đăng nhập."), 503
+
+    if not user:
+        return jsonify(error="Email hoặc mật khẩu không đúng."), 401
+    if user["RoleName"] != "Student":
+        return jsonify(error="Ứng dụng Vite hiện hỗ trợ tài khoản học sinh."), 403
+
+    session.clear()
+    session["user_id"] = user["UserID"]
+    session["email"] = user["Email"]
+    session["fullname"] = user["FullName"]
+    session["role"] = user["RoleName"]
+    return jsonify(
+        user={
+            "id": user["UserID"],
+            "email": user["Email"],
+            "fullname": user["FullName"],
+            "role": user["RoleName"],
+        },
+        csrf_token=_csrf_token(),
+    )
+
+
+@app.post("/api/logout")
+def api_logout():
+    session.clear()
+    session["_csrf_token"] = secrets.token_urlsafe(32)
+    return jsonify(ok=True, csrf_token=session["_csrf_token"])
+
+
+@app.post("/api/register")
+def api_register():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="Dữ liệu đăng ký không hợp lệ."), 400
+    email = data.get("email")
+    password = data.get("password")
+    fullname = data.get("fullname")
+    if (
+        not isinstance(email, str)
+        or not email.strip()
+        or len(email) > 150
+        or not isinstance(fullname, str)
+        or not fullname.strip()
+        or len(fullname) > 100
+        or not isinstance(password, str)
+        or len(password) < 8
+        or len(password) > 128
+    ):
+        return (
+            jsonify(error="Vui lòng nhập email, họ tên hợp lệ và mật khẩu từ 8 đến 128 ký tự."),
+            400,
+        )
+    try:
+        registered = register_user(email.strip(), password, fullname.strip())
+    except pyodbc.Error:
+        app.logger.exception("Không thể đăng ký NovaPath qua Vite API")
+        return jsonify(error="Không thể kết nối SQL Server để đăng ký."), 503
+    if not registered:
+        return jsonify(error="Email đã tồn tại hoặc có lỗi xảy ra."), 409
+    return jsonify(message="Đăng ký thành công, vui lòng đăng nhập."), 201
+
+
+@app.get("/api/dashboard")
+def api_dashboard():
+    user, error = _api_user()
+    if error:
+        return error
+    try:
+        return jsonify(load_dashboard_data(user["id"]))
+    except (pyodbc.Error, ValueError):
+        app.logger.exception("Không thể tải dashboard NovaPath qua Vite API")
+        return jsonify(error="Không thể tải dữ liệu từ SQL Server."), 503
+
+
+@app.get("/api/profile")
+def api_profile():
+    user, error = _api_user()
+    if error:
+        return error
+    try:
+        profile = get_student_profile(user["id"])
+        if profile and isinstance(profile.get("ExamDate"), (date, datetime)):
+            profile["ExamDate"] = profile["ExamDate"].strftime("%Y-%m-%d")
+        return jsonify(profile)
+    except (pyodbc.Error, ValueError):
+        app.logger.exception("Không thể tải hồ sơ NovaPath qua Vite API")
+        return jsonify(error="Không thể tải hồ sơ từ SQL Server."), 503
+
+
+@app.put("/api/profile")
+def api_update_profile():
+    user, error = _api_user()
+    if error:
+        return error
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="Dữ liệu hồ sơ không hợp lệ."), 400
+    fullname = data.get("fullname")
+    phone = data.get("phone", "")
+    school = data.get("school", "")
+    if not all(isinstance(value, str) for value in (fullname, phone, school)):
+        return jsonify(error="Họ tên, số điện thoại hoặc trường học không hợp lệ."), 400
+    fullname = fullname.strip()
+    phone = phone.strip()
+    school = school.strip()
+    exam_date = data.get("exam_date") or ""
+    try:
+        target_score = int(data.get("target_score", ""))
+        daily_study_min = int(data.get("daily_study_min", ""))
+        if exam_date:
+            datetime.strptime(exam_date, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return jsonify(error="Điểm mục tiêu, thời lượng học hoặc ngày thi không hợp lệ."), 400
+
+    if (
+        not fullname
+        or len(fullname) > 100
+        or len(phone) > 15
+        or len(school) > 150
+        or not 0 <= target_score <= 1200
+        or daily_study_min <= 0
+    ):
+        return jsonify(error="Vui lòng kiểm tra lại thông tin hồ sơ."), 400
+
+    try:
+        update_student_profile(
+            user["id"],
+            fullname,
+            phone or None,
+            school or None,
+            target_score,
+            exam_date,
+            daily_study_min,
+        )
+    except (pyodbc.Error, ValueError):
+        app.logger.exception("Không thể cập nhật hồ sơ NovaPath qua Vite API")
+        return jsonify(error="Không thể lưu hồ sơ vào SQL Server."), 503
+
+    session["fullname"] = fullname
+    return jsonify(message="Cập nhật hồ sơ thành công.", fullname=fullname)
 
 
 def login_required(f):
