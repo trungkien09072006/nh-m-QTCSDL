@@ -1,0 +1,39 @@
+USE AILearningDB;
+GO
+
+ALTER DATABASE AILearningDB SET RECOVERY FULL;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_BackupDatabase
+    @BackupType VARCHAR(4),                          -- FULL | DIFF | LOG
+    @Dir        NVARCHAR(260) = N'C:\SQLBackup\AILearningDB\'
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @BackupType NOT IN ('FULL', 'DIFF', 'LOG')
+    BEGIN
+        ;THROW 52030, 'BackupType must be FULL, DIFF or LOG.', 1;
+    END;
+
+    IF RIGHT(@Dir, 1) <> N'\'
+        SET @Dir = @Dir + N'\';
+
+    DECLARE @File NVARCHAR(400) =
+        @Dir + N'AILearningDB_' + @BackupType + N'_'
+             + FORMAT(SYSDATETIME(), 'yyyyMMdd_HHmmss')
+             + CASE WHEN @BackupType = 'LOG' THEN N'.trn' ELSE N'.bak' END;
+
+    IF @BackupType = 'FULL'
+        BACKUP DATABASE AILearningDB TO DISK = @File WITH CHECKSUM, INIT;
+    ELSE IF @BackupType = 'DIFF'
+        BACKUP DATABASE AILearningDB TO DISK = @File WITH DIFFERENTIAL, CHECKSUM, INIT;
+    ELSE
+        BACKUP LOG AILearningDB TO DISK = @File WITH CHECKSUM, INIT;
+
+    -- Kiểm tra file sao lưu đọc được và checksum hợp lệ
+    RESTORE VERIFYONLY FROM DISK = @File WITH CHECKSUM;
+
+    SELECT @File AS BackupFile;
+END;
+GO

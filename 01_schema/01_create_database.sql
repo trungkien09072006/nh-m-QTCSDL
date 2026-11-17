@@ -1,0 +1,5 @@
+IF DB_ID('AILearningDB') IS NULL
+    CREATE DATABASE AILearningDB;
+GO
+USE AILearningDB;
+GO
