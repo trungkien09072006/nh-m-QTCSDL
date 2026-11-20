@@ -64,4 +64,18 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(profile),
     }),
+  exams: () => request("/exams"),
+  startExam: (examId) =>
+    request(`/exams/${examId}/attempts`, { method: "POST" }),
+  getExamAttempt: (attemptId) => request(`/exam-attempts/${attemptId}`),
+  saveExamAnswers: (attemptId, answers) =>
+    request(`/exam-attempts/${attemptId}/answers`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    }),
+  submitExam: (attemptId, answers) =>
+    request(`/exam-attempts/${attemptId}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    }),
 };

@@ -58,11 +58,13 @@ Vite chuyển tiếp các request `/api` tới Flask, do đó hai giao diện đ
 
 - `01_schema`: tạo database, bảng và dữ liệu khởi tạo.
 - `03_programmability`: stored procedures và trigger được gọi bởi schema runner.
-- `06_web_app`: website Flask, API, kết nối database và kiểm thử.
+- `06_web_app`: website Flask, API, kết nối database, luồng làm bài thi và kiểm thử.
 - `vite_app`: giao diện React + Vite và cấu hình proxy API.
 - `scripts\start-novapath.ps1`: khởi động cả hai giao diện trên Windows.
 - `package.json`: lệnh `npm start` ở thư mục dự án.
 - `requirements.txt`: dependencies Python của backend.
+
+Học sinh có thể chọn đề đã duyệt trong mục **Làm bài thi**, trả lời câu hỏi và nộp bài để xem điểm cùng lời giải. Điểm bài thi được tính theo tỷ lệ câu đúng trên tổng số câu (thang 100); đáp án được tự lưu, có đồng hồ đếm ngược và bài sẽ tự nộp khi hết giờ. Đáp án đúng và lời giải chỉ được gửi sau khi nộp.
 
 ## Kiểm tra
 

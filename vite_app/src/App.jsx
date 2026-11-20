@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, refreshCsrfToken } from "./api.js";
+import ExamPage from "./features/exams/ExamPage.jsx";
 
 function Brand() {
   return (
@@ -280,7 +281,7 @@ export default function App() {
     try {
       if (currentPage === "profile") {
         setProfile(await api.profile());
-      } else {
+      } else if (currentPage !== "exams") {
         setDashboard(await api.dashboard());
       }
     } catch (requestError) {
@@ -415,6 +416,7 @@ export default function App() {
         <p className="nav-caption">KHÔNG GIAN HỌC TẬP</p>
         <nav className="main-nav" aria-label="Điều hướng chính">
           <button className={`nav-link ${page === "dashboard" ? "active" : ""}`} onClick={() => navigate("dashboard")}><span className="nav-icon">⌂</span>Tổng quan</button>
+          <button className={`nav-link ${page === "exams" ? "active" : ""}`} onClick={() => navigate("exams")}><span className="nav-icon">✎</span>Làm bài thi</button>
           <button className={`nav-link ${page === "competencies" ? "active" : ""}`} onClick={() => navigate("competencies")}><span className="nav-icon">▤</span>Năng lực</button>
           <button className={`nav-link ${page === "profile" ? "active" : ""}`} onClick={() => navigate("profile")}><span className="nav-icon">♙</span>Hồ sơ của tôi</button>
         </nav>
@@ -429,12 +431,14 @@ export default function App() {
       </aside>
       <main className="main-content">
         <header className="topbar">
-          <div className="breadcrumb">Không gian học tập <span>/</span> <strong>{page === "profile" ? "Hồ sơ" : page === "competencies" ? "Năng lực" : "Tổng quan"}</strong></div>
+          <div className="breadcrumb">Không gian học tập <span>/</span> <strong>{page === "profile" ? "Hồ sơ" : page === "competencies" ? "Năng lực" : page === "exams" ? "Làm bài thi" : "Tổng quan"}</strong></div>
           <div className="topbar-right"><span>{new Intl.DateTimeFormat("vi-VN", { dateStyle: "long" }).format(new Date())}</span><button className="refresh-button" onClick={() => loadPageData(page)}>Làm mới</button></div>
         </header>
         <div className="page-content">
           {error && !page.includes("profile") && <div className="alert error" role="alert">{error}</div>}
-          {page === "profile" ? (
+          {page === "exams" ? (
+            <ExamPage api={api} />
+          ) : page === "profile" ? (
             profile ? <ProfileForm profile={profile} onSave={saveProfile} busy={busy} error={error} notice={notice} /> : <div className="alert warning">Đang tải hồ sơ...</div>
           ) : page === "competencies" ? (
             <section className="panel"><div className="panel-heading"><div><p className="eyebrow">BẢN ĐỒ NĂNG LỰC</p><h2>Năng lực học tập</h2></div></div>{dashboard ? <div className="competency-grid">{dashboard.competencies?.map((item, index) => <article className="competency-item" key={`${item.SubjectName}-${item.CompetencyName}-${index}`}><div><span>{item.CompetencyName}</span><strong>{item.MasteryPercent}%</strong></div><div className="progress-track"><span style={{ width: `${item.MasteryPercent}%` }} /></div><small>{item.SubjectName}</small></article>)}</div> : <EmptyState icon="▤" title="Đang tải năng lực" description="Vui lòng đợi trong giây lát." />}</section>

@@ -63,5 +63,5 @@ CSDL: SQL Server – `AILearningDB` (schema `dbo`). Mọi file chạy lại đư
 - Đề xuất ban đầu nêu PostgreSQL, nhưng mã nguồn nhóm đang dùng SQL Server nên các view viết bằng T-SQL.
 - `ReadinessScore` trong `vw_ExamReadiness` là chỉ số tham khảo (trọng số 0.40 / 0.30 / 0.20 / 0.10), không thay thế dự đoán của AI.
 - `vw_QuestionCountByCompetency` dùng `SCHEMABINDING`: muốn sửa các cột `CompetencyID`, `IsApproved`, `Difficulty` của `dbo.Questions` cần `DROP VIEW` trước.
-- Seed hiện chỉ có đề `MOCK`, nên `vw_DiagnosticResults` rỗng cho tới khi có đề `DIAGNOSTIC`.
+- `01_schema\05_seed_diagnostic_exam.sql` tạo đề `DIAGNOSTIC` mẫu từ các câu hỏi đã duyệt; view chẩn đoán chỉ có kết quả sau khi học sinh nộp bài chẩn đoán.
 - Ghi chú trong code ghi rõ mục đích từng view; phần kiểm thử nằm ở `10_view_tests.sql`.

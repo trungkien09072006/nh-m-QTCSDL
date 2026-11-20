@@ -16,9 +16,11 @@ from database import (
 )
 
 from content import bp as content_bp
+from exams import bp as exams_bp
 
 app = Flask(__name__)
 app.register_blueprint(content_bp)
+app.register_blueprint(exams_bp)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
