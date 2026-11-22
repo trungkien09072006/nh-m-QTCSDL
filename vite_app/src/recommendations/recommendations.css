@@ -1,0 +1,68 @@
+.rec-page { display: grid; gap: 18px; }
+.rec-header { margin-bottom: 2px; }
+.rec-panel .panel-heading { align-items: flex-start; }
+.rec-button { min-height: 34px; padding: 0 14px; border: 1px solid #d9d3fb; border-radius: 8px; background: #f3f0ff; color: var(--purple-dark); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.rec-button:hover:not(:disabled) { background: #e9e4ff; }
+.rec-button:disabled { opacity: .6; cursor: wait; }
+.rec-button.ghost { border-color: var(--line); background: #fff; color: #6b778c; }
+.rec-link { display: inline-flex; min-height: 34px; align-items: center; color: var(--purple-dark); font-size: 11px; font-weight: 700; text-decoration: underline; }
+
+.rec-method { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; margin-bottom: 14px; padding: 10px 12px; border: 1px dashed #d8d2f7; border-radius: 9px; background: #faf9ff; }
+.rec-method p { flex: 1 1 280px; margin: 0; color: #6b778c; font-size: 11px; line-height: 1.55; }
+.rec-method-badge { padding: 3px 9px; border-radius: 99px; background: #e9e4ff; color: var(--purple-dark); font-size: 10px; font-weight: 800; white-space: nowrap; }
+
+.rec-score-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); align-items: center; gap: 16px 24px; margin-bottom: 10px; }
+.rec-score small, .rec-prob small { display: block; color: #9ba5b4; font-size: 9px; font-weight: 700; letter-spacing: 1px; }
+.rec-score strong, .rec-prob strong { display: block; margin-top: 4px; color: #252e40; font: 800 32px/1.1 Manrope, "Segoe UI", sans-serif; }
+.rec-score strong span { color: #9ba5b4; font-size: 14px; font-weight: 600; }
+.rec-score em { display: block; margin-top: 4px; color: #6b778c; font-size: 11px; font-style: normal; }
+.rec-prob .progress-track { margin-top: 10px; }
+.rec-risk { display: inline-block; margin-top: 6px; padding: 2px 9px; border-radius: 99px; font-size: 10px; font-weight: 800; }
+.rec-risk.safe { background: #e6f7ee; color: #1f7a4f; }
+.rec-risk.watch { background: #fff4d6; color: #8a6a0c; }
+.rec-risk.risk { background: #ffe9eb; color: #a63d47; }
+.rec-risk-note { margin: 4px 0; padding: 10px 12px; border-radius: 9px; background: #f6f7fb; color: #4a5568; font-size: 12px; line-height: 1.55; }
+.rec-meta { margin: 6px 0 0; color: #9ba5b4; font-size: 10px; }
+.rec-spark { margin: 0; color: var(--purple); }
+.rec-spark svg { display: block; width: 100%; max-width: 220px; height: 42px; }
+.rec-spark figcaption { margin-top: 2px; color: #9ba5b4; font-size: 10px; }
+
+.rec-quality { display: flex; align-items: flex-start; gap: 9px; margin: 14px 0 4px; padding: 10px 12px; border-radius: 9px; background: #f6f7fb; }
+.rec-quality p { margin: 0; color: #5b667a; font-size: 11px; line-height: 1.55; }
+.rec-quality-dot { flex: 0 0 9px; width: 9px; height: 9px; margin-top: 4px; border-radius: 50%; background: #e0a82e; }
+.rec-quality-dot.low { background: #d9534f; }
+.rec-quality-dot.good { background: #2fa36b; }
+
+.rec-subtitle { margin: 18px 0 10px; color: #2c3548; font: 750 13px Manrope, "Segoe UI", sans-serif; }
+.rec-factors { display: grid; gap: 10px; }
+.rec-factor > div:first-child { display: flex; justify-content: space-between; gap: 10px; color: #495469; font-size: 11px; }
+.rec-factor small { color: #9ba5b4; }
+.rec-factor strong { color: var(--purple); }
+.rec-factor-notes { margin: 12px 0 0; padding-left: 18px; color: #6b778c; font-size: 11px; line-height: 1.7; }
+
+.rec-tips { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: tip; }
+.rec-tip { position: relative; padding: 12px 14px 12px 44px; border: 1px solid #eff1f6; border-radius: 9px; counter-increment: tip; }
+.rec-tip::before { content: counter(tip); position: absolute; left: 13px; top: 12px; display: grid; width: 22px; height: 22px; place-items: center; border-radius: 50%; background: #f0edff; color: var(--purple-dark); font-size: 11px; font-weight: 800; }
+.rec-tip strong { color: #2c3548; font-size: 12px; }
+.rec-tip p { margin: 4px 0 0; color: #6b778c; font-size: 11px; line-height: 1.6; }
+.rec-tip.gap { border-color: #f3e5bf; background: #fffdf5; }
+
+.rec-list { display: grid; gap: 12px; }
+.rec-card { padding: 14px 15px; border: 1px solid #ece9f8; border-radius: 10px; background: #fff; }
+.rec-card.accepted { background: #f7fcf9; border-color: #d7eee3; }
+.rec-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.rec-type { padding: 2px 9px; border-radius: 99px; background: #f0edff; color: var(--purple-dark); font-size: 10px; font-weight: 800; }
+.rec-priority { padding: 2px 9px; border-radius: 99px; background: #fff4d6; color: #8a6a0c; font-size: 10px; font-weight: 800; }
+.rec-priority.high { background: #ffe9eb; color: #a63d47; }
+.rec-status { margin-left: auto; color: #9ba5b4; font-size: 10px; font-weight: 700; }
+.rec-card h3 { margin: 0; color: #2c3548; font: 750 13px/1.45 Manrope, "Segoe UI", sans-serif; }
+.rec-topic { margin: 4px 0 10px; color: #8a95a8; font-size: 10px; }
+.rec-why, .rec-how { margin-top: 8px; padding: 9px 11px; border-radius: 8px; background: #f8f9fc; }
+.rec-how { background: #f3f0ff; }
+.rec-why strong, .rec-how strong { color: #3a4055; font-size: 10px; letter-spacing: .3px; }
+.rec-why p, .rec-how p { margin: 3px 0 0; color: #5b667a; font-size: 11px; line-height: 1.6; }
+.rec-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+
+@media (max-width: 640px) {
+  .rec-score strong, .rec-prob strong { font-size: 27px; }
+}
