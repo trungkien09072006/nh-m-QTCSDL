@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, refreshCsrfToken } from "./api.js";
 import ExamPage from "./features/exams/ExamPage.jsx";
+import RecommendationsPage from "./recommendations/RecommendationsPage.jsx";
+import { TutorChat } from "./features/tutor";
+import { LearningPathPage } from "./features/learning-path";
 
 function Brand() {
   return (
@@ -162,7 +165,7 @@ function Dashboard({ user, data, onNavigate }) {
         <section className="panel">
           <div className="panel-heading">
             <div><p className="eyebrow">HỌC ĐÚNG TRỌNG TÂM</p><h2>Lộ trình sắp tới</h2></div>
-            <button className="text-button" onClick={() => onNavigate("competencies")}>Xem năng lực →</button>
+            <button className="text-button" onClick={() => onNavigate("learning-path")}>Xem lộ trình →</button>
           </div>
           {data?.tasks?.length ? (
             <div className="task-list">
@@ -281,7 +284,7 @@ export default function App() {
     try {
       if (currentPage === "profile") {
         setProfile(await api.profile());
-      } else if (currentPage !== "exams") {
+      } else if (!["exams", "recommendations", "tutor", "learning-path"].includes(currentPage)) {
         setDashboard(await api.dashboard());
       }
     } catch (requestError) {
@@ -409,6 +412,16 @@ export default function App() {
     return <AuthPage onLogin={login} onRegister={register} busy={busy} error={error} notice={notice} />;
   }
 
+  const pageTitles = {
+    dashboard: "Tổng quan",
+    "learning-path": "Lộ trình học",
+    exams: "Làm bài thi",
+    recommendations: "Gợi ý & dự đoán",
+    tutor: "AI Tutor",
+    competencies: "Năng lực",
+    profile: "Hồ sơ",
+  };
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -416,7 +429,10 @@ export default function App() {
         <p className="nav-caption">KHÔNG GIAN HỌC TẬP</p>
         <nav className="main-nav" aria-label="Điều hướng chính">
           <button className={`nav-link ${page === "dashboard" ? "active" : ""}`} onClick={() => navigate("dashboard")}><span className="nav-icon">⌂</span>Tổng quan</button>
+          <button className={`nav-link ${page === "learning-path" ? "active" : ""}`} onClick={() => navigate("learning-path")}><span className="nav-icon">◷</span>Lộ trình học</button>
           <button className={`nav-link ${page === "exams" ? "active" : ""}`} onClick={() => navigate("exams")}><span className="nav-icon">✎</span>Làm bài thi</button>
+          <button className={`nav-link ${page === "recommendations" ? "active" : ""}`} onClick={() => navigate("recommendations")}><span className="nav-icon">✧</span>Gợi ý &amp; dự đoán</button>
+          <button className={`nav-link ${page === "tutor" ? "active" : ""}`} onClick={() => navigate("tutor")}><span className="nav-icon">✦</span>AI Tutor</button>
           <button className={`nav-link ${page === "competencies" ? "active" : ""}`} onClick={() => navigate("competencies")}><span className="nav-icon">▤</span>Năng lực</button>
           <button className={`nav-link ${page === "profile" ? "active" : ""}`} onClick={() => navigate("profile")}><span className="nav-icon">♙</span>Hồ sơ của tôi</button>
         </nav>
@@ -431,13 +447,19 @@ export default function App() {
       </aside>
       <main className="main-content">
         <header className="topbar">
-          <div className="breadcrumb">Không gian học tập <span>/</span> <strong>{page === "profile" ? "Hồ sơ" : page === "competencies" ? "Năng lực" : page === "exams" ? "Làm bài thi" : "Tổng quan"}</strong></div>
+          <div className="breadcrumb">Không gian học tập <span>/</span> <strong>{pageTitles[page] || "Tổng quan"}</strong></div>
           <div className="topbar-right"><span>{new Intl.DateTimeFormat("vi-VN", { dateStyle: "long" }).format(new Date())}</span><button className="refresh-button" onClick={() => loadPageData(page)}>Làm mới</button></div>
         </header>
         <div className="page-content">
           {error && !page.includes("profile") && <div className="alert error" role="alert">{error}</div>}
-          {page === "exams" ? (
+          {page === "learning-path" ? (
+            <LearningPathPage />
+          ) : page === "exams" ? (
             <ExamPage api={api} />
+          ) : page === "recommendations" ? (
+            <RecommendationsPage />
+          ) : page === "tutor" ? (
+            <TutorChat studentName={user.fullname} />
           ) : page === "profile" ? (
             profile ? <ProfileForm profile={profile} onSave={saveProfile} busy={busy} error={error} notice={notice} /> : <div className="alert warning">Đang tải hồ sơ...</div>
           ) : page === "competencies" ? (

@@ -17,10 +17,16 @@ from database import (
 
 from content import bp as content_bp
 from exams import bp as exams_bp
+from recommendations import bp as recommendations_bp
+from tutor_api import bp as tutor_bp
+from learning_path import bp as learning_path_bp
 
 app = Flask(__name__)
 app.register_blueprint(content_bp)
 app.register_blueprint(exams_bp)
+app.register_blueprint(recommendations_bp)
+app.register_blueprint(tutor_bp)
+app.register_blueprint(learning_path_bp)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"

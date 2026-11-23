@@ -1,0 +1,42 @@
+.lp-page { display: grid; gap: 18px; }
+.lp-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.lp-stat { padding: 14px; border: 1px solid #eff1f6; border-radius: 10px; background: #fafbff; }
+.lp-stat small { display: block; color: #8c97a9; font-size: 9px; font-weight: 700; letter-spacing: .8px; }
+.lp-stat strong { display: block; margin-top: 6px; color: #252e40; font: 800 22px/1.1 Manrope, "Segoe UI", sans-serif; }
+.lp-stat.overdue strong { color: #b94a48; }
+
+.lp-progress-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #495469; margin-bottom: 6px; }
+.lp-progress-head strong { color: var(--purple-dark); }
+.lp-dates { margin: 10px 0 0; color: #8c97a9; font-size: 11px; }
+
+.lp-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.lp-filter-btn { padding: 6px 12px; border: 1px solid var(--line); border-radius: 99px; background: #fff; color: #616e82; font-size: 11px; font-weight: 700; }
+.lp-filter-btn.active { border-color: var(--purple); background: #f0edff; color: var(--purple-dark); }
+
+.lp-list { display: grid; gap: 12px; }
+.lp-card { padding: 15px; border: 1px solid #eceef5; border-radius: 10px; background: #fff; }
+.lp-card.done { border-color: #d7eee3; background: #f7fcf9; }
+.lp-card.doing { border-color: #d8d2f7; background: #faf9ff; }
+.lp-card.skipped { opacity: .75; background: #fafbfc; }
+
+.lp-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.lp-badge { padding: 3px 9px; border-radius: 99px; font-size: 10px; font-weight: 800; }
+.lp-badge.todo { background: #eef2f8; color: #526075; }
+.lp-badge.doing { background: #ebe6ff; color: var(--purple-dark); }
+.lp-badge.done { background: #e3f7ec; color: #1f7a4f; }
+.lp-badge.skipped { background: #f2f3f5; color: #8a95a8; }
+.lp-badge.overdue { background: #ffe9eb; color: #a63d47; }
+.lp-priority { font-size: 10px; font-weight: 700; color: #8a6a0c; background: #fff4d6; padding: 3px 8px; border-radius: 99px; }
+.lp-date { margin-left: auto; color: #8a95a8; font-size: 11px; font-weight: 600; }
+
+.lp-card h3 { margin: 0 0 4px; color: #252e40; font: 750 14px/1.4 Manrope, "Segoe UI", sans-serif; }
+.lp-meta { margin: 0 0 12px; color: #7a869a; font-size: 11px; }
+
+.lp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lp-btn { min-height: 32px; padding: 0 12px; border: 1px solid #d9d3fb; border-radius: 8px; background: #f3f0ff; color: var(--purple-dark); font-size: 11px; font-weight: 700; }
+.lp-btn:hover:not(:disabled) { background: #e6e0ff; }
+.lp-btn.primary { border-color: var(--purple); background: var(--purple); color: #fff; }
+.lp-btn.primary:hover:not(:disabled) { background: var(--purple-dark); }
+.lp-btn.ghost { border-color: var(--line); background: #fff; color: #6b778c; }
+.lp-btn:disabled { opacity: .6; cursor: wait; }
+.lp-link { margin-right: auto; color: var(--purple-dark); font-size: 11px; font-weight: 700; text-decoration: underline; }
