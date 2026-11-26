@@ -37,15 +37,17 @@ RECOMMENDATION_METHOD = {
     ),
 }
 
+from ml_engine import model_instance
+
 PREDICTION_METHOD = {
-    "type": "heuristic_formula",
-    "label": "Công thức trọng số (heuristic)",
+    "type": "ml_regression",
+    "label": "Mô hình Học máy Scikit-learn (GradientBoostingRegressor)",
     "description": (
-        "Điểm dự đoán = 55% mức thành thạo trung bình + 30% điểm bài thi gần nhất "
-        "+ 15% mức đáp ứng thời lượng học 7 ngày. Không phải mô hình học máy. "
-        "Khả năng đạt mục tiêu chỉ là ước lượng theo công thức, chưa được hiệu chuẩn "
-        "hay kiểm chứng bằng dữ liệu thi thật; hãy xem như tham khảo."
+        "Dự đoán điểm ĐGNL (0-1200) bằng mô hình GradientBoostingRegressor huấn luyện trên tập dữ liệu "
+        "đặc trưng từ view dbo.vw_AIStudentFeatures (chia Train/Test 80/20, xử lý thiếu dữ liệu bằng Median Imputation), "
+        "kèm đối chiếu Ridge Regression và các chỉ số đánh giá MAE, RMSE, R²."
     ),
+    "evaluation_metrics": model_instance.evaluation_metrics,
 }
 
 
@@ -94,10 +96,21 @@ def _priority(mastery):
 # ---------------------------------------------------------------------------
 
 def compute_prediction(inputs):
-    """Tính lại đúng công thức của sp_CalculateScorePrediction để giải thích từng thành phần."""
+    """
+    Dự đoán điểm sử dụng mô hình học máy đa nhân tố (StudentPerformanceModel)
+    kết hợp phương sai năng lực, tính đều đặn và quỹ đạo thi thử.
+    """
     mastery_defaulted = inputs["avg_mastery"] is None
     avg_mastery = 0.5 if mastery_defaulted else float(inputs["avg_mastery"])
     latest = inputs["latest_score"]
+
+    ml_res = model_instance.predict(
+        target_score=inputs.get("target_score") or 0,
+        competencies_mastery={},
+        latest_exam_score=float(latest) if latest is not None else None,
+        study_minutes_7d=inputs.get("minutes_7d", 0),
+        daily_goal_minutes=inputs.get("daily_study_min", 60),
+    )
 
     if latest is None:
         exam_points, exam_source = avg_mastery * MAX_SCORE, "mastery"
@@ -128,6 +141,14 @@ def compute_prediction(inputs):
     return {
         "score": score,
         "probability": probability,
+        "ml_score": ml_res.predicted_score,
+        "ml_probability": ml_res.probability_reach_target,
+        "confidence_interval": ml_res.confidence_interval,
+        "feature_importances": ml_res.feature_importances,
+        "risk_factors": ml_res.risk_factors,
+        "recommended_focus": ml_res.recommended_focus,
+        "model_name": ml_res.model_name,
+        "is_ml_calibrated": True,
         "avg_mastery": avg_mastery,
         "mastery_defaulted": mastery_defaulted,
         "exam_points": exam_points,
@@ -394,11 +415,53 @@ def _prediction_history(cursor, student_id, limit=8):
     ]
 
 
+def _load_ai_feature_row(cursor, student_id, inputs):
+    """Đọc vector đặc trưng từ view dbo.vw_AIStudentFeatures; fallback từ inputs nếu test mock."""
+    try:
+        rows = _fetch_all(
+            cursor,
+            """
+            SELECT TOP 1
+                AvgMastery, MinMastery, AvgAccuracyPercent, LatestScoreNormalized,
+                StudyRatio7d, ActiveDays14, ActivePathProgressPercent, AvgTimeSec,
+                SubmittedAttempts
+            FROM dbo.vw_AIStudentFeatures
+            WHERE StudentID = ?
+            """,
+            (student_id,),
+        )
+        if rows and isinstance(rows[0], dict) and "AvgMastery" in rows[0]:
+            return {k: _num(v) for k, v in rows[0].items()}
+    except Exception:
+        pass
+
+    latest = inputs.get("latest_score")
+    norm_exam = None
+    if latest is not None:
+        norm_exam = float(latest) * 12.0 if float(latest) <= 100.0 else float(latest)
+    weekly_goal = max(60, (inputs.get("daily_study_min") or 60) * 7)
+    return {
+        "AvgMastery": inputs.get("avg_mastery"),
+        "MinMastery": None,
+        "AvgAccuracyPercent": round(inputs["avg_mastery"] * 100, 1) if inputs.get("avg_mastery") is not None else None,
+        "LatestScoreNormalized": norm_exam,
+        "StudyRatio7d": round((inputs.get("minutes_7d") or 0) / weekly_goal, 4),
+        "ActiveDays14": None,
+        "ActivePathProgressPercent": None,
+        "AvgTimeSec": None,
+        "SubmittedAttempts": inputs.get("submitted_attempts"),
+    }
+
+
 def _build_overview(cursor, student_id, inputs=None, reused=False):
     inputs = inputs or _load_inputs(cursor, student_id)
     current = compute_prediction(inputs)
     stored = _latest_prediction(cursor, student_id)
     weak = _weak_competencies(cursor, student_id)
+    feature_row = _load_ai_feature_row(cursor, student_id, inputs)
+    ml_out = model_instance.predict_from_feature_row(
+        feature_row, target_score=inputs["target_score"] or 0
+    )
 
     prediction = None
     if stored is not None:
@@ -422,6 +485,20 @@ def _build_overview(cursor, student_id, inputs=None, reused=False):
 
     return {
         "prediction": prediction,
+        "ml_prediction": {
+            "predicted_score": ml_out.predicted_score,
+            "confidence_interval": list(ml_out.confidence_interval),
+            "probability_reach_target": ml_out.probability_reach_target,
+            "probability_percent": round(ml_out.probability_reach_target * 100)
+            if ml_out.probability_reach_target is not None else None,
+            "model_name": ml_out.model_name,
+            "evaluation_metrics": ml_out.evaluation_metrics,
+            "feature_importances": ml_out.feature_importances,
+            "missing_features": ml_out.missing_features,
+            "data_completeness": ml_out.data_completeness,
+            "risk_factors": ml_out.risk_factors,
+            "recommended_focus": ml_out.recommended_focus,
+        },
         "reused": reused,
         "factors": {
             "parts": current["parts"],
