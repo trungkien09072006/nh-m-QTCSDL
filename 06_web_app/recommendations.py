@@ -77,3 +77,17 @@ def api_refresh_prediction():
     if error:
         return error
     return _run(lambda: jsonify(service.refresh_prediction(student_id)))
+
+
+@bp.get("/api/predictions/model-report")
+def api_model_report():
+    """Trả về báo cáo huấn luyện và đánh giá mô hình ML (MAE, RMSE, R², Train/Test split)."""
+    student_id, error = _student_access()
+    if error:
+        return error
+    from ml_engine import model_instance
+    return jsonify(
+        model_version=model_instance.model_version,
+        evaluation_metrics=model_instance.evaluation_metrics,
+        feature_weights=model_instance.feature_weights,
+    )
