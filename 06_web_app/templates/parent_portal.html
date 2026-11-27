@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if portal_page == "register" %}
+  <title>Đăng ký phụ huynh — NovaPath</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% else %}
+  <title>Cổng phụ huynh — NovaPath</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f4f6fb;color:#18243c;font:16px system-ui}
+    header{background:#17284a;color:#fff;padding:18px max(5%,calc((100% - 1100px)/2));display:flex;justify-content:space-between;align-items:center}
+    main{max-width:1100px;margin:28px auto;padding:0 20px}.panel{background:#fff;border-radius:12px;padding:22px;margin:18px 0;box-shadow:0 4px 20px #17284a0b}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.metric{padding:14px;border:1px solid #e1e7f0;border-radius:9px}
+    .metric small{display:block;color:#64728a}.metric strong{display:block;margin-top:5px;font-size:21px}
+    input{padding:10px;border:1px solid #bbc7d9;border-radius:6px;font:inherit;max-width:420px;width:100%}
+    button{border:0;border-radius:7px;padding:10px 15px;background:#285aca;color:#fff;font:inherit;cursor:pointer}
+    .row{padding:13px 0;border-bottom:1px solid #e1e7f0}.muted{color:#64728a}.notice{padding:13px;border-radius:7px;background:#e3efff;margin:12px 0}
+    .warning{background:#fff2d6}.status{font-weight:600}.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  </style>
+  {% endif %}
+</head>
+{% if portal_page == "register" %}
+<body class="auth-page">
+  <div class="auth-container">
+    <h1 class="brand-name">nova<span>path</span></h1>
+    <h2>Tạo tài khoản phụ huynh</h2>
+    {% if db_error %}<div class="notice notice-error" role="alert">{{ db_error }}</div>{% endif %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="notice notice-{{ 'error' if category == 'error' else 'success' }}" role="alert">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label for="fullname">Họ và tên</label>
+        <input id="fullname" type="text" name="fullname" maxlength="100" required class="form-control">
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input id="email" type="email" name="email" maxlength="150" required class="form-control">
+      </div>
+      <div class="form-group">
+        <label for="password">Mật khẩu (ít nhất 8 ký tự)</label>
+        <input id="password" type="password" name="password" minlength="8" maxlength="128" required class="form-control">
+      </div>
+      <button type="submit" class="btn-primary">Đăng ký phụ huynh</button>
+    </form>
+    <p class="auth-footer"><a href="{{ url_for('login') }}">Quay lại đăng nhập</a></p>
+  </div>
+</body>
+{% else %}
+<body>
+  <header>
+    <strong>NovaPath · Cổng phụ huynh</strong>
+    <form action="{{ url_for('logout') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Đăng xuất</button>
+    </form>
+  </header>
+  <main>
+    <h1>Xin chào {{ session.get('fullname', 'phụ huynh') }}</h1>
+    {% if db_error %}<div class="notice warning" role="alert">{{ db_error }}</div>{% endif %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}<div class="notice" role="status">{{ message }}</div>{% endfor %}
+    {% endwith %}
+
+    <section class="panel">
+      <h2>Liên kết với học sinh</h2>
+      <p class="muted">Nhập email tài khoản học sinh. Học sinh cần chấp thuận yêu cầu trước khi bạn xem được dữ liệu.</p>
+      <form class="actions" method="post" action="{{ url_for('parent_portal.request_link') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="student-email">Email học sinh</label>
+        <input id="student-email" type="email" name="student_email" maxlength="150" required>
+        <button type="submit">Gửi yêu cầu</button>
+      </form>
+      {% if requests %}
+        <h3>Yêu cầu đã gửi</h3>
+        {% for item in requests %}
+          <div class="row">{{ item.StudentName }} <span class="muted">({{ item.StudentEmail }})</span> · <span class="status">{{ {'Pending':'Đang chờ học sinh','Accepted':'Đã liên kết','Rejected':'Đã từ chối'}.get(item.Status, item.Status) }}</span></div>
+        {% endfor %}
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>Tiến độ học tập</h2>
+      {% if children %}
+        {% for child in children %}
+          <article class="row">
+            <h3>{{ child.StudentName }}</h3>
+            <div class="grid">
+              <div class="metric"><small>Điểm mục tiêu</small><strong>{{ child.TargetScore }} / 1200</strong></div>
+              <div class="metric"><small>Điểm thi gần nhất</small><strong>{{ child.LatestScore if child.LatestScore is not none else "Chưa có" }}</strong></div>
+              <div class="metric"><small>Điểm dự đoán</small><strong>{{ "%.0f"|format(child.PredictedScore) if child.PredictedScore is not none else "Chưa có" }}</strong></div>
+              <div class="metric"><small>Thời gian học 7 ngày</small><strong>{{ child.StudyMin7d or 0 }} / {{ child.WeeklyGoalMin or 0 }} phút</strong></div>
+              <div class="metric"><small>Bài thi đã nộp</small><strong>{{ child.SubmittedAttempts or 0 }}</strong></div>
+              <div class="metric"><small>Thông báo chưa đọc</small><strong>{{ child.UnreadNotifications or 0 }}</strong></div>
+            </div>
+            <p class="muted">Trung bình thành thạo: {{ "%.0f"|format((child.AvgMastery or 0) * 100) }}% · Lần hoạt động gần nhất: {{ child.LastActivityAt or "Chưa ghi nhận" }}</p>
+          </article>
+        {% endfor %}
+      {% else %}
+        <p class="muted">Chưa có học sinh liên kết. Gửi yêu cầu ở phía trên để bắt đầu.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>Cảnh báo học tập</h2>
+      {% if alerts %}
+        {% for alert in alerts %}
+          <div class="row"><strong>{{ alert.StudentName }} · {{ alert.AlertLevel }}</strong><p>{{ alert.AlertSummary }}</p></div>
+        {% endfor %}
+      {% else %}
+        <p class="muted">Chưa có cảnh báo cần chú ý cho các học sinh đã liên kết.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+{% endif %}
+</html>

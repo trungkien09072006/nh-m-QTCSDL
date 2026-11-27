@@ -1,4 +1,130 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nội dung học tập · NovaPath</title><style>
-*{box-sizing:border-box}body{margin:0;font:16px system-ui;background:#f4f6fb;color:#18243c}header{background:#17284a;color:white;padding:22px 5%;display:flex;align-items:center;justify-content:space-between}main{max-width:1200px;margin:32px auto;padding:0 24px}nav{display:flex;gap:10px;flex-wrap:wrap;margin:24px 0}a{color:#255ac4}nav a,.button,button{display:inline-block;border:0;border-radius:7px;padding:10px 16px;background:#285aca;color:white;text-decoration:none;cursor:pointer;font:inherit}nav a{background:#e0e8fa;color:#183c83}nav a.active{background:#285aca;color:white}.card{background:white;border-radius:12px;padding:24px;box-shadow:0 4px 20px #17284a0b}.notice{padding:15px;margin:12px 0;border-radius:6px;background:#dff3e7}.error{background:#ffe5e5}input:not([type=checkbox]):not([type=radio]),textarea,select{width:100%;padding:11px;border:1px solid #bbc7d9;border-radius:6px;font:inherit}textarea{min-height:100px}label{display:block;margin:16px 0 8px}table{width:100%;border-collapse:collapse}td,th{padding:13px;text-align:left;border-bottom:1px solid #e1e7f0;vertical-align:top}td{max-width:380px;overflow-wrap:anywhere}.scroll{overflow:auto}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{padding:6px 10px;font-size:14px}.danger{background:#a93140}.muted{color:#64728a}.option{display:flex;align-items:center;gap:12px;margin:12px 0}.toolbar{display:flex;gap:12px;margin:18px 0}.toolbar input{flex:1}form.inline{display:inline}small{font-size:13px}fieldset{border:1px solid #d5deed;margin:24px 0;padding:20px}</style></head><body>
-<header><strong>NovaPath / Nội dung học tập</strong><div>{{ session.fullname }} · {{ session.role }} <form class="inline" action="{{ url_for('logout') }}" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>Đăng xuất</button></form></div></header>
-<main><nav>{% for key,meta in kinds.items() %}<a class="{{ 'active' if key==kind else '' }}" href="{{ url_for('content.listing',kind=key) }}">{{ meta[0] }}</a>{% endfor %}</nav>{% for cat,msg in get_flashed_messages(with_categories=true) %}<div role="alert" class="notice {{ cat }}">{{ msg }}</div>{% endfor %}{% block body %}{% endblock %}</main></body></html>
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nội dung học tập · NovaPath</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font:16px system-ui;background:#f4f6fb;color:#18243c}
+    header{background:#17284a;color:white;padding:22px 5%;display:flex;align-items:center;justify-content:space-between}
+    main{max-width:1200px;margin:32px auto;padding:0 24px}
+    nav{display:flex;gap:10px;flex-wrap:wrap;margin:24px 0}
+    a{color:#255ac4}
+    nav a,.button,button{display:inline-block;border:0;border-radius:7px;padding:10px 16px;background:#285aca;color:white;text-decoration:none;cursor:pointer;font:inherit}
+    nav a{background:#e0e8fa;color:#183c83}
+    nav a.active{background:#285aca;color:white}
+    .card{background:white;border-radius:12px;padding:24px;box-shadow:0 4px 20px #17284a0b}
+    .notice{padding:15px;margin:12px 0;border-radius:6px;background:#dff3e7}
+    .error{background:#ffe5e5}
+    input:not([type=checkbox]):not([type=radio]),textarea,select{width:100%;padding:11px;border:1px solid #bbc7d9;border-radius:6px;font:inherit}
+    textarea{min-height:100px}
+    label{display:block;margin:16px 0 8px}
+    table{width:100%;border-collapse:collapse}
+    td,th{padding:13px;text-align:left;border-bottom:1px solid #e1e7f0;vertical-align:top}
+    td{max-width:380px;overflow-wrap:anywhere}
+    .scroll{overflow:auto}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .actions button{padding:6px 10px;font-size:14px}
+    .danger{background:#a93140}
+    .muted{color:#64728a}
+    .option{display:flex;align-items:center;gap:12px;margin:12px 0}
+    .toolbar{display:flex;gap:12px;margin:18px 0}
+    .toolbar input{flex:1}
+    form.inline{display:inline}
+    small{font-size:13px}
+    fieldset{border:1px solid #d5deed;margin:24px 0;padding:20px}
+    .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+    .chart-card{background:white;border-radius:12px;padding:20px;margin:16px 0}
+    .chart-row{display:grid;grid-template-columns:minmax(100px,1fr) 2fr auto;align-items:center;gap:12px;margin:13px 0}
+    .chart-track{height:12px;border-radius:8px;background:#e8edf6;overflow:hidden}
+    .chart-bar{height:100%;background:#3569d4;border-radius:8px}
+    .chart-bar.warn{background:#df9b32}
+    .chart-bar.good{background:#2c9b6b}
+    .chart-empty{color:#64728a;padding:14px 0}
+    .parent-link-request{padding:14px 0;border-bottom:1px solid #e1e7f0}
+    .button-secondary{background:#68758a}
+  </style>
+</head>
+<body>
+  <header>
+    <strong>NovaPath / Nội dung học tập</strong>
+    <div>{{ session.fullname }} · {{ session.role }}
+      <form class="inline" action="{{ url_for('logout') }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button>Đăng xuất</button>
+      </form>
+    </div>
+  </header>
+  <main>
+    <nav>
+      {% for key,meta in kinds.items() %}
+        <a class="{{ 'active' if key==kind else '' }}" href="{{ url_for('content.listing',kind=key) }}">{{ meta[0] }}</a>
+      {% endfor %}
+      <a class="{{ 'active' if kind=='analytics' else '' }}" href="{{ url_for('content.analytics') }}">Phân tích</a>
+    </nav>
+    {% for cat,msg in get_flashed_messages(with_categories=true) %}
+      <div role="alert" class="notice {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+    {% block body %}
+      {% if kind == "analytics" %}
+        <section class="card">
+          <h1>Phân tích học tập</h1>
+          <p class="muted">Báo cáo được tổng hợp từ các view SQL hiện có.</p>
+          {% if db_error %}<div class="notice error" role="alert">{{ db_error }}</div>{% endif %}
+        </section>
+
+        <section class="chart-grid" aria-label="Phân tích chất lượng">
+          <article class="chart-card">
+            <h2>Chất lượng câu hỏi</h2>
+            {% if question_quality %}
+              {% set total_questions = question_quality|sum(attribute='QuestionCount') %}
+              {% for item in question_quality %}
+                {% set pct = (100 * item.QuestionCount / total_questions) if total_questions else 0 %}
+                <div class="chart-row">
+                  <span>{{ item.QualityAssessment }}</span>
+                  <div class="chart-track" role="img" aria-label="{{ item.QuestionCount }} câu hỏi, {{ pct|round|int }}%">
+                    <div class="chart-bar {{ 'warn' if item.NeedsReviewCount else 'good' }}" style="width:{{ pct }}%"></div>
+                  </div>
+                  <strong>{{ item.QuestionCount }}</strong>
+                </div>
+                {% if item.NeedsReviewCount %}<small class="muted">{{ item.NeedsReviewCount }} câu cần rà soát</small>{% endif %}
+              {% endfor %}
+            {% else %}<p class="chart-empty">Chưa có dữ liệu câu hỏi.</p>{% endif %}
+          </article>
+
+          <article class="chart-card">
+            <h2>Gợi ý học tập</h2>
+            {% if recommendation_quality %}
+              {% for item in recommendation_quality %}
+                <div class="chart-row">
+                  <span>{{ item.RecommendationType }}</span>
+                  <div class="chart-track" role="img" aria-label="Tỷ lệ chấp nhận {{ item.AcceptedPercent or 0 }}%">
+                    <div class="chart-bar good" style="width:{{ [item.AcceptedPercent or 0, 100]|min }}%"></div>
+                  </div>
+                  <strong>{{ item.AcceptedPercent or 0 }}%</strong>
+                </div>
+                <small class="muted">{{ item.AcceptedCount }} chấp nhận / {{ item.TotalRecommendations }} gợi ý</small>
+              {% endfor %}
+            {% else %}<p class="chart-empty">Chưa có dữ liệu gợi ý.</p>{% endif %}
+          </article>
+        </section>
+
+        <section class="card">
+          <h2>Xếp hạng bài thi (5 vị trí đầu mỗi đề)</h2>
+          {% if exam_ranking %}
+            <div class="scroll"><table>
+              <thead><tr><th>Đề thi</th><th>Hạng</th><th>Học sinh</th><th>Điểm cao nhất</th></tr></thead>
+              <tbody>
+                {% for item in exam_ranking %}
+                  <tr><td>{{ item.ExamTitle }}</td><td>{{ item.RankInExam }}</td><td>{{ item.StudentName }}</td><td>{{ item.BestScore }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table></div>
+          {% else %}<p class="chart-empty">Chưa có bài thi đã nộp để xếp hạng.</p>{% endif %}
+        </section>
+      {% endif %}
+    {% endblock %}
+  </main>
+</body>
+</html>

@@ -2,7 +2,7 @@
 from contextlib import closing
 from urllib.parse import urlsplit
 import pyodbc
-from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from database import _connection_string, _fetch_all
 
 bp = Blueprint('content', __name__, url_prefix='/teacher')
@@ -19,6 +19,58 @@ KINDS = {
 def authorize():
  if 'user_id' not in session: return redirect(url_for('login'))
  if session.get('role') not in ('Teacher','Admin'): abort(403)
+
+@bp.get('/analytics')
+def analytics():
+ try:
+  with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
+   with closing(connection.cursor()) as cursor:
+    question_quality = _fetch_all(cursor, """
+     SELECT QualityAssessment, COUNT(*) AS QuestionCount,
+            SUM(CASE WHEN NeedsReview = 1 THEN 1 ELSE 0 END) AS NeedsReviewCount
+     FROM dbo.vw_QuestionQuality
+     GROUP BY QualityAssessment
+     ORDER BY QuestionCount DESC
+    """)
+    recommendation_quality = _fetch_all(cursor, """
+     SELECT RecommendationType, SUM(TotalRecommendations) AS TotalRecommendations,
+            SUM(AcceptedCount) AS AcceptedCount,
+            CAST(100.0 * SUM(AcceptedCount) / NULLIF(SUM(TotalRecommendations), 0) AS DECIMAL(5,2)) AS AcceptedPercent
+     FROM dbo.vw_RecommendationQuality
+     GROUP BY RecommendationType
+     ORDER BY RecommendationType
+    """)
+    exam_ranking = _fetch_all(cursor, """
+     WITH ranked AS (
+      SELECT ExamID, ExamTitle, StudentID, StudentName, BestScore, RankInExam,
+             ROW_NUMBER() OVER (PARTITION BY ExamID ORDER BY RankInExam, StudentID) AS DisplayOrder
+      FROM dbo.vw_ExamRanking
+     )
+     SELECT ExamTitle, StudentName, BestScore, RankInExam
+     FROM ranked
+     WHERE DisplayOrder <= 5
+     ORDER BY ExamTitle, DisplayOrder
+    """)
+ except pyodbc.Error:
+  current_app.logger.exception('Không thể tải báo cáo phân tích cho giáo viên')
+  return render_template(
+   'content_base.html',
+   kinds=KINDS,
+   kind='analytics',
+   question_quality=[],
+   recommendation_quality=[],
+   exam_ranking=[],
+   db_error='Không thể tải các view phân tích từ SQL Server.',
+  ), 503
+ return render_template(
+  'content_base.html',
+  kinds=KINDS,
+  kind='analytics',
+  question_quality=question_quality,
+  recommendation_quality=recommendation_quality,
+  exam_ranking=exam_ranking,
+  db_error=None,
+ )
 
 def positive(value):
  try: n=int(value)

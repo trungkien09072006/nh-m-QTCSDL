@@ -352,10 +352,13 @@ def ask_tutor():
                     session_id = sess_row[0]
                 else:
                     cursor.execute(
-                        "INSERT INTO TutorSessions (StudentID) VALUES (?)",
+                        """
+                        INSERT INTO TutorSessions (StudentID)
+                        OUTPUT INSERTED.SessionID
+                        VALUES (?)
+                        """,
                         (student_id,)
                     )
-                    cursor.execute("SELECT SCOPE_IDENTITY()")
                     session_id = int(cursor.fetchone()[0])
 
                 # 2. Thu thập context câu hỏi nếu có
@@ -457,10 +460,13 @@ def clear_tutor_session():
         with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
             with closing(connection.cursor()) as cursor:
                 cursor.execute(
-                    "INSERT INTO TutorSessions (StudentID) VALUES (?)",
+                    """
+                    INSERT INTO TutorSessions (StudentID)
+                    OUTPUT INSERTED.SessionID
+                    VALUES (?)
+                    """,
                     (student_id,)
                 )
-                cursor.execute("SELECT SCOPE_IDENTITY()")
                 new_session_id = int(cursor.fetchone()[0])
                 connection.commit()
 

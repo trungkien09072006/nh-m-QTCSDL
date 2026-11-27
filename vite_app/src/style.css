@@ -170,8 +170,8 @@ input:focus { border-color: #8979ee; box-shadow: 0 0 0 3px #8979ee20; }
   .sidebar { position: static; width: auto; min-height: unset; padding: 16px; border-right: 0; border-bottom: 1px solid var(--line); }
   .sidebar .brand { padding: 0; }
   .nav-caption, .ai-note { display: none; }
-  .main-nav { display: flex; gap: 4px; margin-top: 15px; }
-  .nav-link { flex: 1; justify-content: center; gap: 6px; padding: 0 6px; font-size: 11px; }
+  .main-nav { display: flex; min-width: 0; max-width: 100%; gap: 4px; margin-top: 15px; overflow-x: auto; }
+  .nav-link { flex: 0 0 auto; justify-content: center; gap: 6px; padding: 0 10px; font-size: 11px; white-space: nowrap; }
   .sidebar-bottom { margin-top: 12px; }
   .sidebar-user { padding-top: 10px; }
   .main-content { margin-left: 0; }

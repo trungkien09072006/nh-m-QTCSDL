@@ -46,10 +46,49 @@
         <div class="topbar-right">
           <span class="today">{{ current_date if current_date else "" }}</span>
           <span class="notification" aria-label="Thông báo">♧<i></i></span>
+          <form method="POST" action="{{ url_for('logout') }}" class="logout-form mobile-logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="mobile-logout">Đăng xuất</button>
+          </form>
         </div>
       </header>
 
       <div class="page-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% for category, message in messages %}
+          <section class="notice notice-{{ 'error' if category == 'error' else 'success' }}" role="{{ 'alert' if category == 'error' else 'status' }}">
+            <span class="notice-icon" aria-hidden="true">{{ '!' if category == 'error' else '✓' }}</span>
+            <div><p>{{ message }}</p></div>
+          </section>
+          {% endfor %}
+        {% endwith %}
+
+        {% if dashboard and dashboard.parent_link_requests %}
+        <section class="panel" aria-labelledby="parent-link-title">
+          <div class="panel-heading">
+            <div><p class="eyebrow">QUYỀN RIÊNG TƯ</p><h2 id="parent-link-title">Yêu cầu liên kết phụ huynh</h2></div>
+          </div>
+          <p>Chỉ chấp thuận nếu bạn xác nhận đây là phụ huynh/người giám hộ của mình.</p>
+          {% for link_request in dashboard.parent_link_requests %}
+          <div class="parent-link-request">
+            <strong>{{ link_request.ParentName }}</strong> <span class="muted">({{ link_request.ParentEmail }})</span>
+            <div class="actions">
+              <form method="post" action="{{ url_for('parent_portal.respond_to_link', request_id=link_request.RequestID) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="decision" value="accept">
+                <button type="submit">Chấp thuận</button>
+              </form>
+              <form method="post" action="{{ url_for('parent_portal.respond_to_link', request_id=link_request.RequestID) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="decision" value="reject">
+                <button type="submit" class="button-secondary">Từ chối</button>
+              </form>
+            </div>
+          </div>
+          {% endfor %}
+        </section>
+        {% endif %}
+
         {% if db_error %}
         <section class="notice notice-error" role="alert">
           <span class="notice-icon">!</span>

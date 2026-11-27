@@ -24,6 +24,8 @@ npm install --prefix .\vite_app
 
 Nếu chưa tạo database/schema, mở `01_schema\00_run_all.sql` trong SQL Server Management Studio (SSMS), cập nhật biến `Root` ở đầu file thành đường dẫn thư mục dự án trên máy của bạn rồi chạy script. Cần có SQL Server và ODBC driver trước khi khởi động ứng dụng.
 
+Nếu database đã tồn tại từ phiên bản trước, chỉ chạy khối `ParentLinkRequests migration` trong `01_schema\00_run_all.sql` bằng SSMS; không chạy lại toàn bộ schema runner. Phụ huynh có thể đăng ký tại `/parent/register`, gửi yêu cầu bằng email học sinh; học sinh phải chấp thuận trên dashboard trước khi dữ liệu được chia sẻ. Giáo viên và quản trị viên xem báo cáo tại `/teacher/analytics`.
+
 ## Khởi động website và app
 
 Trong PowerShell tại thư mục dự án, kích hoạt môi trường Python nếu đây là terminal mới, sau đó chạy:
@@ -64,7 +66,7 @@ Vite chuyển tiếp các request `/api` tới Flask, do đó hai giao diện đ
 - `package.json`: lệnh `npm start` ở thư mục dự án.
 - `requirements.txt`: dependencies Python của backend.
 
-Học sinh có thể chọn đề đã duyệt trong mục **Làm bài thi**, trả lời câu hỏi và nộp bài để xem điểm cùng lời giải. Điểm bài thi được tính theo tỷ lệ câu đúng trên tổng số câu (thang 100); đáp án được tự lưu, có đồng hồ đếm ngược và bài sẽ tự nộp khi hết giờ. Đáp án đúng và lời giải chỉ được gửi sau khi nộp.
+Học sinh có thể chọn đề đã duyệt trong mục **Làm bài thi**, trả lời câu hỏi và nộp bài để xem điểm cùng lời giải. Điểm bài thi được tính theo tỷ lệ câu đúng trên tổng số câu (thang 100); đáp án được tự lưu, có đồng hồ đếm ngược và bài sẽ tự nộp khi hết giờ. Đáp án đúng và lời giải chỉ được gửi sau khi nộp. Cổng phụ huynh chỉ hiển thị học sinh đã liên kết và được học sinh chấp thuận; báo cáo giáo viên tổng hợp chất lượng câu hỏi, gợi ý và xếp hạng từ các view SQL.
 
 ## Kiểm tra
 

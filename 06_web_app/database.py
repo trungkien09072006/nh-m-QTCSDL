@@ -124,18 +124,25 @@ def register_user(email: str, password: str, fullname: str, role_name: str = 'St
 
                 cursor.execute(
                     """
+                    DECLARE @InsertedUsers TABLE (UserID INT);
                     INSERT INTO Users (RoleID, Email, PasswordHash, FullName)
-                    VALUES (?, ?, ?, ?)
+                    OUTPUT INSERTED.UserID INTO @InsertedUsers (UserID)
+                    VALUES (?, ?, ?, ?);
+                    SELECT UserID FROM @InsertedUsers;
                     """,
                     (role[0], email, _hash_password(password), fullname)
                 )
+                while cursor.description is None:
+                    if not cursor.nextset():
+                        raise pyodbc.Error("SQL Server did not return the new user ID.")
+                inserted_user = cursor.fetchone()
+                if inserted_user is None:
+                    raise pyodbc.Error("SQL Server did not return the new user ID.")
 
                 if role_name == 'Student':
-                    cursor.execute("SELECT SCOPE_IDENTITY()")
-                    user_id = cursor.fetchone()[0]
                     cursor.execute(
                         "INSERT INTO StudentProfiles (StudentID, TargetScore, DailyStudyMin) VALUES (?, 0, 60)",
-                        (user_id,)
+                        (inserted_user[0],)
                     )
                 connection.commit()
                 return True
@@ -203,7 +210,20 @@ def load_dashboard_data(user_id: int) -> dict:
                     "tasks": [],
                     "recommendations": [],
                     "exams": [],
+                    "parent_link_requests": [],
                 }
+
+            parent_link_requests = _fetch_all(
+                cursor,
+                """
+                SELECT request.RequestID, parent.FullName AS ParentName, parent.Email AS ParentEmail
+                FROM dbo.ParentLinkRequests AS request
+                INNER JOIN dbo.Users AS parent ON parent.UserID = request.ParentID
+                WHERE request.StudentID = ? AND request.Status = 'Pending'
+                ORDER BY request.CreatedAt
+                """,
+                (user_id,),
+            )
 
             cursor.execute(
                 """
@@ -348,4 +368,5 @@ def load_dashboard_data(user_id: int) -> dict:
         ],
         "recommendations": recommendations,
         "exams": exams,
+        "parent_link_requests": parent_link_requests,
     }

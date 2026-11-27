@@ -22,6 +22,7 @@ from tutor_api import bp as tutor_bp
 from learning_path import bp as learning_path_bp
 from parent_api import bp as parent_bp
 from admin_api import bp as admin_bp
+from parent_portal import bp as parent_portal_bp
 
 app = Flask(__name__)
 app.register_blueprint(content_bp)
@@ -31,6 +32,7 @@ app.register_blueprint(tutor_bp)
 app.register_blueprint(learning_path_bp)
 app.register_blueprint(parent_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(parent_portal_bp)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -288,6 +290,8 @@ def login():
                 return redirect(url_for('content.listing'))
             if user['RoleName'] == 'Student':
                 return redirect(url_for('dashboard'))
+            if user['RoleName'] == 'Parent':
+                return redirect(url_for('parent_portal.dashboard'))
             else:
                 flash(f"Đăng nhập thành công với vai trò {user['RoleName']}. Tính năng đang phát triển.", "success")
                 return redirect(url_for('login'))

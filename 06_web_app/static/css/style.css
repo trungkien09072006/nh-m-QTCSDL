@@ -101,6 +101,7 @@ a { color: inherit; text-decoration: none; }
 .sidebar-user small { margin-top: 3px; color: #9aa4b4; font-size: 10px; }
 .user-menu { margin-left: auto; color: #8d98a9; font-size: 21px; letter-spacing: 1px; }
 .logout-form { display: flex; margin: 0; }
+.mobile-logout-form { display: none; }
 .logout-form button { padding: 0; border: 0; background: transparent; cursor: pointer; font-family: inherit; }
 .logout-form .text-link { padding: 0; }
 
@@ -235,6 +236,8 @@ h2 { margin-bottom: 0; color: #2c3548; font-family: Manrope, "Segoe UI", sans-se
   .nav-icon { width: auto; font-size: 14px; }
   .main-content { margin-left: 0; }
   .topbar { height: 48px; }
+  .mobile-logout-form { display: flex; margin: 0; }
+  .mobile-logout { padding: 6px 9px; border: 0; border-radius: 7px; background: #f0edff; color: var(--purple-dark); font-family: inherit; font-size: 10px; font-weight: 600; white-space: nowrap; }
   .today { display: none; }
   .page-content { padding: 25px 16px 20px; }
   .welcome-row { align-items: flex-start; }
