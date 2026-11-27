@@ -203,7 +203,7 @@ class ServiceDatabaseTests(unittest.TestCase):
         self.assertTrue(result["prediction"]["is_stale"])
         self.assertEqual(result["prediction"]["probability_percent"], 57)
         self.assertEqual(result["prediction"]["risk_level"], "Nguy cơ cao")
-        self.assertEqual(result["method"]["type"], "heuristic_formula")
+        self.assertEqual(result["method"]["type"], "ml_regression")
         self.assertIsInstance(result["prediction"]["score"], float)
 
     def test_overview_without_prediction_still_explains_factors(self):

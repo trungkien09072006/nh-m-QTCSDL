@@ -53,7 +53,7 @@ class ApiRouteTests(unittest.TestCase):
         verify_login.assert_not_called()
 
     @patch("app.verify_login")
-    def test_api_login_rejects_staff_for_student_app(self, verify_login):
+    def test_api_login_allows_all_supported_roles(self, verify_login):
         verify_login.return_value = {
             "UserID": 4,
             "Email": "teacher@example.test",
@@ -67,8 +67,8 @@ class ApiRouteTests(unittest.TestCase):
             headers=self.headers(),
         )
 
-        self.assertEqual(response.status_code, 403)
-        self.assertIn("hỗ trợ tài khoản học sinh", response.get_json()["error"])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["user"]["role"], "Teacher")
 
     @patch("app.register_user", return_value=True)
     def test_api_register_uses_post_and_returns_created(self, register_user):

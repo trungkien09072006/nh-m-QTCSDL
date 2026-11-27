@@ -1,4 +1,3 @@
-
 import json
 import logging
 import os
@@ -267,42 +266,42 @@ def get_tutor_history():
                     (student_id,)
                 )
                 raw_session = cursor.fetchone()
-        session_row = _row_as_dict(cursor, raw_session) if raw_session is not None else None
+                session_row = _row_as_dict(cursor, raw_session) if raw_session is not None else None
 
-        session_id = None
-        if isinstance(session_row, dict):
-            session_id = (
-                session_row.get("SessionID")
-                or session_row.get("session_id")
-                or next(iter(session_row.values()), None)
-            )
-        if session_id is None and isinstance(raw_session, (tuple, list)) and len(raw_session) > 0:
-                session_id = raw_session[0]
+                session_id = None
+                if isinstance(session_row, dict):
+                    session_id = (
+                        session_row.get("SessionID")
+                        or session_row.get("session_id")
+                        or next(iter(session_row.values()), None)
+                    )
+                if session_id is None and isinstance(raw_session, (tuple, list)) and len(raw_session) > 0:
+                    session_id = raw_session[0]
 
-        if session_id is None:
-            return jsonify(session_id=None, messages=[])
+                if session_id is None:
+                    return jsonify(session_id=None, messages=[])
 
-        cursor.execute(
-            """
-            SELECT
-                tm.MessageID AS id,
-                tm.Sender AS sender,
-                tm.Content AS content,
-                tm.QuestionID AS question_id,
-                CONVERT(VARCHAR(19), tm.SentAt, 120) AS sent_at,
-                q.Content AS question_content,
-                c.CompetencyName AS competency_name
-            FROM TutorMessages AS tm
-            LEFT JOIN Questions AS q ON q.QuestionID = tm.QuestionID
-            LEFT JOIN Competencies AS c ON c.CompetencyID = q.CompetencyID
-            WHERE tm.SessionID = ?
-            ORDER BY tm.MessageID ASC
-            """,
-            (session_id,),
-        )
-        raw_messages = cursor.fetchall() or []
-        messages = [_row_as_dict(cursor, r) for r in raw_messages]
-        return jsonify(session_id=session_id, messages=messages)
+                cursor.execute(
+                    """
+                    SELECT
+                        tm.MessageID AS id,
+                        tm.Sender AS sender,
+                        tm.Content AS content,
+                        tm.QuestionID AS question_id,
+                        CONVERT(VARCHAR(19), tm.SentAt, 120) AS sent_at,
+                        q.Content AS question_content,
+                        c.CompetencyName AS competency_name
+                    FROM TutorMessages AS tm
+                    LEFT JOIN Questions AS q ON q.QuestionID = tm.QuestionID
+                    LEFT JOIN Competencies AS c ON c.CompetencyID = q.CompetencyID
+                    WHERE tm.SessionID = ?
+                    ORDER BY tm.MessageID ASC
+                    """,
+                    (session_id,),
+                )
+                raw_messages = cursor.fetchall() or []
+                messages = [_row_as_dict(cursor, r) for r in raw_messages]
+                return jsonify(session_id=session_id, messages=messages)
     except pyodbc.Error:
         logger.exception("Không thể tải lịch sử trò chuyện AI Tutor")
         return jsonify(error="Không thể kết nối CSDL để tải lịch sử hội thoại."), 503

@@ -20,6 +20,8 @@ from exams import bp as exams_bp
 from recommendations import bp as recommendations_bp
 from tutor_api import bp as tutor_bp
 from learning_path import bp as learning_path_bp
+from parent_api import bp as parent_bp
+from admin_api import bp as admin_bp
 
 app = Flask(__name__)
 app.register_blueprint(content_bp)
@@ -27,6 +29,8 @@ app.register_blueprint(exams_bp)
 app.register_blueprint(recommendations_bp)
 app.register_blueprint(tutor_bp)
 app.register_blueprint(learning_path_bp)
+app.register_blueprint(parent_bp)
+app.register_blueprint(admin_bp)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -105,8 +109,8 @@ def api_login():
 
     if not user:
         return jsonify(error="Email hoặc mật khẩu không đúng."), 401
-    if user["RoleName"] != "Student":
-        return jsonify(error="Ứng dụng Vite hiện hỗ trợ tài khoản học sinh."), 403
+    if user["RoleName"] not in {"Student", "Parent", "Teacher", "Admin"}:
+        return jsonify(error="Vai trò tài khoản không được hỗ trợ."), 403
 
     session.clear()
     session["user_id"] = user["UserID"]
