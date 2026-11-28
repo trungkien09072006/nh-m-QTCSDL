@@ -8,7 +8,14 @@
 <body class="auth-page">
     <div class="auth-container">
         <h1 class="brand-name">nova<span>path</span></h1>
-        <h2>Đăng nhập</h2>
+        {% set portal_names = {'student': 'học sinh', 'parent': 'phụ huynh', 'teacher': 'giáo viên'} %}
+        <h2>Đăng nhập{% if portal %} · {{ portal_names[portal] }}{% endif %}</h2>
+        <nav class="auth-footer" aria-label="Chọn cổng đăng nhập">
+            Đăng nhập với tư cách:
+            <a href="{{ url_for('login', portal='student') }}">Học sinh</a> ·
+            <a href="{{ url_for('login', portal='parent') }}">Phụ huynh</a> ·
+            <a href="{{ url_for('login', portal='teacher') }}">Giáo viên</a>
+        </nav>
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
@@ -32,6 +39,13 @@
             <button type="submit" class="btn-primary">Đăng nhập</button>
         </form>
         <p class="auth-footer">Chưa có tài khoản? <a href="{{ url_for('register') }}">Đăng ký học viên</a> · <a href="{{ url_for('parent_portal.register_parent') }}">Đăng ký phụ huynh</a></p>
+        {% if admin_login_required %}
+        <p class="auth-footer">Quản trị viên đăng nhập tại <a href="{{ url_for('admin_portal.admin_login') }}">cổng Admin riêng</a>.</p>
+        {% elif required_portal %}
+        <p class="auth-footer">Tài khoản này cần đăng nhập tại <a href="{{ url_for('login', portal=required_portal) }}">cổng {{ portal_names[required_portal] }}</a>.</p>
+        {% else %}
+        <p class="auth-footer"><a href="{{ url_for('admin_portal.admin_login') }}">Đăng nhập quản trị viên</a></p>
+        {% endif %}
     </div>
 </body>
 </html>

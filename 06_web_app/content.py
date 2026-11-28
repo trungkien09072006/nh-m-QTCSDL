@@ -17,8 +17,13 @@ KINDS = {
 
 @bp.before_request
 def authorize():
- if 'user_id' not in session: return redirect(url_for('login'))
+ if 'user_id' not in session: return redirect(url_for('login', portal='teacher'))
  if session.get('role') not in ('Teacher','Admin'): abort(403)
+
+@bp.post('/logout')
+def logout_teacher():
+ session.clear()
+ return redirect('/')
 
 @bp.get('/analytics')
 def analytics():
@@ -69,6 +74,85 @@ def analytics():
   question_quality=question_quality,
   recommendation_quality=recommendation_quality,
   exam_ranking=exam_ranking,
+  db_error=None,
+ )
+
+@bp.get('/students')
+def teacher_students():
+ if session.get('role')!='Teacher': abort(403)
+ try:
+  with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
+   with closing(connection.cursor()) as cursor:
+    students=_fetch_all(cursor, """
+     SELECT overview.StudentID, overview.FullName, overview.SchoolName,
+            overview.TargetScore, overview.LatestScore, overview.AvgMastery,
+            overview.StudyMin7d, overview.LastActivityAt
+     FROM dbo.TeacherStudent AS assigned
+     INNER JOIN dbo.vw_StudentOverview AS overview
+       ON overview.StudentID=assigned.StudentID
+     WHERE assigned.TeacherID=?
+     ORDER BY overview.FullName
+    """, (session['user_id'],))
+ except pyodbc.Error:
+  current_app.logger.exception('Không thể tải danh sách học sinh được phân công')
+  return render_template(
+   'teacher_students.html',
+   students=[],
+   db_error='Không thể tải học sinh. Hãy chạy 01_schema/06_teacher_student_migration.sql trong SSMS.',
+  ), 503
+ return render_template('teacher_students.html', students=students, db_error=None)
+
+@bp.get('/students/<int:student_id>')
+def teacher_student_detail(student_id):
+ if session.get('role')!='Teacher': abort(403)
+ try:
+  with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
+   with closing(connection.cursor()) as cursor:
+    student_rows=_fetch_all(cursor, """
+     SELECT overview.StudentID, overview.FullName, overview.SchoolName,
+            overview.TargetScore, overview.ExamDate, overview.DaysToExam,
+            overview.AvgMastery, overview.SubmittedAttempts, overview.BestScore,
+            overview.LatestScore, overview.StudyMin7d, overview.LastActivityAt,
+            overview.PredictedScore, overview.ProbReachTarget
+     FROM dbo.TeacherStudent AS assigned
+     INNER JOIN dbo.vw_StudentOverview AS overview
+       ON overview.StudentID=assigned.StudentID
+     WHERE assigned.TeacherID=? AND assigned.StudentID=?
+    """, (session['user_id'], student_id))
+    if not student_rows: abort(404)
+    competencies=_fetch_all(cursor, """
+     SELECT SubjectName, CompetencyName, MasteryPercent, MasteryLevel,
+            NeedsReview, AttemptCount
+     FROM dbo.vw_StudentCompetencyProfile
+     WHERE StudentID=?
+     ORDER BY WeaknessRank
+    """, (student_id,))
+    alerts=_fetch_all(cursor, """
+     SELECT AlertLevel, AlertSummary
+     FROM dbo.vw_StudentAlerts
+     WHERE StudentID=? AND AlertCount>0
+    """, (student_id,))
+    readiness_rows=_fetch_all(cursor, """
+     SELECT ReadinessScore, ReadinessLevel, DaysToExam
+     FROM dbo.vw_ExamReadiness
+     WHERE StudentID=?
+    """, (student_id,))
+ except pyodbc.Error:
+  current_app.logger.exception('Không thể tải thông tin học sinh được phân công')
+  return render_template(
+   'teacher_student.html',
+   student=None,
+   competencies=[],
+   alerts=[],
+   readiness=None,
+   db_error='Không thể tải dữ liệu học sinh từ SQL Server.',
+  ), 503
+ return render_template(
+  'teacher_student.html',
+  student=student_rows[0],
+  competencies=competencies,
+  alerts=alerts,
+  readiness=readiness_rows[0] if readiness_rows else None,
   db_error=None,
  )
 

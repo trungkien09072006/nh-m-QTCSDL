@@ -19,14 +19,20 @@ function Brand() {
 
 function AuthPage({ onLogin, onRegister, busy, error, notice }) {
   const [mode, setMode] = useState("login");
+  const [loginRole, setLoginRole] = useState("Student");
   const [fullname, setFullname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const roleOptions = [
+    { value: "Student", label: "Học sinh" },
+    { value: "Parent", label: "Phụ huynh" },
+    { value: "Teacher", label: "Giáo viên" },
+  ];
 
   async function submit(event) {
     event.preventDefault();
     if (mode === "login") {
-      await onLogin(email, password);
+      await onLogin(email, password, loginRole);
     } else {
       const registered = await onRegister(fullname, email, password);
       if (registered) {
@@ -44,12 +50,29 @@ function AuthPage({ onLogin, onRegister, busy, error, notice }) {
         <h1>{mode === "login" ? "Chào mừng trở lại" : "Tạo tài khoản học viên"}</h1>
         <p className="auth-description">
           {mode === "login"
-            ? "Đăng nhập để tiếp tục lộ trình học tập."
+            ? `Đăng nhập với tư cách ${roleOptions.find((role) => role.value === loginRole).label} để vào đúng cổng.`
             : "Bắt đầu xây dựng lộ trình ôn luyện phù hợp."}
         </p>
         {notice && <div className="alert success" role="status">{notice}</div>}
         {error && <div className="alert error" role="alert">{error}</div>}
         <form onSubmit={submit}>
+          {mode === "login" && (
+            <fieldset className="role-picker">
+              <legend>Đăng nhập với tư cách</legend>
+              {roleOptions.map((role) => (
+                <label className="role-option" key={role.value}>
+                  <input
+                    type="radio"
+                    name="login-role"
+                    value={role.value}
+                    checked={loginRole === role.value}
+                    onChange={() => setLoginRole(role.value)}
+                  />
+                  <span>{role.label}</span>
+                </label>
+              ))}
+            </fieldset>
+          )}
           {mode === "register" && (
             <label>
               Họ và tên
@@ -93,12 +116,22 @@ function AuthPage({ onLogin, onRegister, busy, error, notice }) {
           {mode === "login" ? "Chưa có tài khoản?" : "Đã có tài khoản?"}{" "}
           <button
             className="text-button"
-            onClick={() => setMode(mode === "login" ? "register" : "login")}
+            onClick={() => {
+              const nextMode = mode === "login" ? "register" : "login";
+              setMode(nextMode);
+              if (nextMode === "register") setLoginRole("Student");
+            }}
             type="button"
           >
             {mode === "login" ? "Đăng ký ngay" : "Đăng nhập"}
           </button>
         </p>
+        {mode === "login" && loginRole === "Parent" && (
+          <p className="auth-switch"><a href="/parent/register">Tạo tài khoản phụ huynh</a></p>
+        )}
+        {mode === "login" && loginRole === "Teacher" && (
+          <p className="auth-switch">Tài khoản giáo viên được cấp bởi quản trị viên.</p>
+        )}
       </section>
     </main>
   );
@@ -278,6 +311,11 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const roleLandingPaths = {
+    Parent: "/parent",
+    Teacher: "/teacher/students",
+    Admin: "/teacher/questions",
+  };
 
   const loadPageData = useCallback(async (currentPage) => {
     setError("");
@@ -303,11 +341,13 @@ export default function App() {
         await refreshCsrfToken();
         const result = await api.session();
         if (active && result.user) {
-          setUser(result.user);
           if (result.user.role === "Student") {
+            setUser(result.user);
             await loadPageData("dashboard");
+          } else if (roleLandingPaths[result.user.role]) {
+            window.location.assign(roleLandingPaths[result.user.role]);
           } else {
-            setError("Tài khoản giáo viên/quản trị hiện dùng phân hệ web Flask.");
+            setError("Vai trò tài khoản không được ứng dụng này hỗ trợ.");
           }
         }
       } catch (requestError) {
@@ -330,18 +370,20 @@ export default function App() {
     return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
   }, [loadPageData, page, user]);
 
-  async function login(email, password) {
+  async function login(email, password, role) {
     setBusy(true);
     setError("");
     try {
-      const result = await api.login(email, password);
-      setUser(result.user);
+      const result = await api.login(email, password, role);
       setNotice("");
       if (result.user.role === "Student") {
+        setUser(result.user);
         setPage("dashboard");
         await loadPageData("dashboard");
+      } else if (roleLandingPaths[result.user.role]) {
+        window.location.assign(roleLandingPaths[result.user.role]);
       } else {
-        setError("Tài khoản giáo viên/quản trị hiện dùng phân hệ web Flask.");
+        setError("Vai trò tài khoản không được ứng dụng này hỗ trợ.");
       }
     } catch (requestError) {
       setError(requestError.message);

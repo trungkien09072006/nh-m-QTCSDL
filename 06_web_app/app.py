@@ -5,7 +5,8 @@ from datetime import date, datetime
 from functools import wraps
 
 import pyodbc
-from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, has_request_context, jsonify, redirect, render_template, request, session, url_for
+from flask.sessions import SecureCookieSessionInterface
 
 from database import (
     get_student_profile,
@@ -22,7 +23,39 @@ from tutor_api import bp as tutor_bp
 from learning_path import bp as learning_path_bp
 from parent_api import bp as parent_bp
 from admin_api import bp as admin_bp
+from admin_portal import bp as admin_portal_bp
 from parent_portal import bp as parent_portal_bp
+
+
+class PortalSessionInterface(SecureCookieSessionInterface):
+    def get_cookie_name(self, app):
+        if not has_request_context():
+            return super().get_cookie_name(app)
+
+        path = request.path
+        if path == "/admin" or path.startswith("/admin/") or path == "/api/admin" or path.startswith("/api/admin/"):
+            return app.config["ADMIN_SESSION_COOKIE_NAME"]
+        if path == "/parent" or path.startswith("/parent/") or path == "/api/parent" or path.startswith("/api/parent/"):
+            return app.config["PARENT_SESSION_COOKIE_NAME"]
+        if path == "/teacher" or path.startswith("/teacher/"):
+            return app.config["TEACHER_SESSION_COOKIE_NAME"]
+        if path == "/login/parent":
+            return app.config["PARENT_SESSION_COOKIE_NAME"]
+        if path == "/login/teacher":
+            return app.config["TEACHER_SESSION_COOKIE_NAME"]
+        if path == "/api/login":
+            data = request.get_json(silent=True)
+            role = data.get("role") if isinstance(data, dict) else None
+            return app.config["PORTAL_SESSION_COOKIE_NAMES"].get(
+                role, app.config["SESSION_COOKIE_NAME"]
+            )
+        if path.startswith("/api/"):
+            role = request.headers.get("X-Portal-Role", "Student")
+            return app.config["PORTAL_SESSION_COOKIE_NAMES"].get(
+                role, app.config["SESSION_COOKIE_NAME"]
+            )
+        return super().get_cookie_name(app)
+
 
 app = Flask(__name__)
 app.register_blueprint(content_bp)
@@ -32,8 +65,19 @@ app.register_blueprint(tutor_bp)
 app.register_blueprint(learning_path_bp)
 app.register_blueprint(parent_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(admin_portal_bp)
 app.register_blueprint(parent_portal_bp)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
+app.session_interface = PortalSessionInterface()
+app.config["SESSION_COOKIE_NAME"] = "novapath_student_session"
+app.config["ADMIN_SESSION_COOKIE_NAME"] = "novapath_admin_session"
+app.config["PARENT_SESSION_COOKIE_NAME"] = "novapath_parent_session"
+app.config["TEACHER_SESSION_COOKIE_NAME"] = "novapath_teacher_session"
+app.config["PORTAL_SESSION_COOKIE_NAMES"] = {
+    "Student": app.config["SESSION_COOKIE_NAME"],
+    "Parent": app.config["PARENT_SESSION_COOKIE_NAME"],
+    "Teacher": app.config["TEACHER_SESSION_COOKIE_NAME"],
+}
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
@@ -46,6 +90,11 @@ def protect_post_requests():
         if not expected or not hmac.compare_digest(
             expected.encode("utf-8"), submitted.encode("utf-8")
         ):
+            if request.path.startswith("/api/"):
+                return jsonify(
+                    error="Phiên bảo mật đã hết hạn. Đang làm mới mã xác thực.",
+                    code="csrf_invalid",
+                ), 400
             abort(400)
 
 
@@ -80,6 +129,11 @@ def api_csrf_token():
     return jsonify(csrf_token=_csrf_token())
 
 
+@app.get("/api/admin/csrf-token")
+def admin_api_csrf_token():
+    return jsonify(csrf_token=_csrf_token())
+
+
 @app.get("/api/session")
 def api_session():
     if "user_id" not in session:
@@ -101,8 +155,11 @@ def api_login():
         return jsonify(error="Dữ liệu đăng nhập không hợp lệ."), 400
     email = data.get("email")
     password = data.get("password")
+    expected_role = data.get("role", "Student")
     if not isinstance(email, str) or not isinstance(password, str):
         return jsonify(error="Vui lòng nhập email và mật khẩu hợp lệ."), 400
+    if not isinstance(expected_role, str) or expected_role not in {"Student", "Parent", "Teacher"}:
+        return jsonify(error="Cổng đăng nhập không hợp lệ."), 400
     try:
         user = verify_login(email.strip(), password)
     except pyodbc.Error:
@@ -111,8 +168,10 @@ def api_login():
 
     if not user:
         return jsonify(error="Email hoặc mật khẩu không đúng."), 401
-    if user["RoleName"] not in {"Student", "Parent", "Teacher", "Admin"}:
+    if user["RoleName"] not in {"Student", "Parent", "Teacher"}:
         return jsonify(error="Vai trò tài khoản không được hỗ trợ."), 403
+    if user["RoleName"] != expected_role:
+        return jsonify(error="Tài khoản không thuộc cổng đăng nhập đã chọn."), 403
 
     session.clear()
     session["user_id"] = user["UserID"]
@@ -272,22 +331,43 @@ def role_required(role):
     return decorator
 
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
+@app.route("/login", defaults={"portal": None}, methods=["GET", "POST"])
+@app.route("/login/<portal>", methods=["GET", "POST"])
+def login(portal):
+    portal_roles = {"student": "Student", "parent": "Parent", "teacher": "Teacher"}
+    if portal is not None and portal not in portal_roles:
+        abort(404)
+
     if request.method == "POST":
         email = (request.form.get("email") or "").strip()
         password = request.form.get("password") or ""
         user = verify_login(email, password)
 
         if user:
+            if portal and user["RoleName"] != portal_roles[portal]:
+                flash("Tài khoản không thuộc cổng đăng nhập đã chọn.", "error")
+                return render_template("login.html", portal=portal), 403
+            if user["RoleName"] == "Admin":
+                return render_template("login.html", portal=portal, admin_login_required=True), 403
+            if not portal and user["RoleName"] != "Student":
+                role_portal = {
+                    "Parent": "parent",
+                    "Teacher": "teacher",
+                }.get(user["RoleName"])
+                return render_template(
+                    "login.html",
+                    portal=portal,
+                    required_portal=role_portal,
+                ), 403
+
             session.clear()
             session['user_id'] = user['UserID']
             session['email'] = user['Email']
             session['fullname'] = user['FullName']
             session['role'] = user['RoleName']
 
-            if user['RoleName'] in ('Teacher', 'Admin'):
-                return redirect(url_for('content.listing'))
+            if user['RoleName'] == 'Teacher':
+                return redirect(url_for('content.teacher_students'))
             if user['RoleName'] == 'Student':
                 return redirect(url_for('dashboard'))
             if user['RoleName'] == 'Parent':
@@ -297,13 +377,13 @@ def login():
                 return redirect(url_for('login'))
 
         flash("Email hoặc mật khẩu không đúng.", "error")
-    return render_template("login.html")
+    return render_template("login.html", portal=portal)
 
 
 @app.post("/logout")
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+    return redirect("/")
 
 
 @app.route("/register", methods=["GET", "POST"])

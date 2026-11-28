@@ -14,7 +14,7 @@ class ParentApiTests(unittest.TestCase):
         self.client = web_app.app.test_client()
 
     def login_as(self, user_id=5, role="Parent"):
-        with self.client.session_transaction() as sess:
+        with self.client.session_transaction("/api/parent") as sess:
             sess.update(user_id=user_id, role=role, fullname="Phụ huynh mẫu")
 
     def test_parent_routes_require_parent_role(self):

@@ -1,11 +1,22 @@
 let csrfToken = "";
+const portalRoles = ["Student", "Parent", "Teacher"];
+const savedRole = sessionStorage.getItem("novapath.portalRole");
+let portalRole = portalRoles.includes(savedRole) ? savedRole : "Student";
 
-async function request(path, options = {}) {
+function selectPortalRole(role) {
+  portalRole = portalRoles.includes(role) ? role : "Student";
+  sessionStorage.setItem("novapath.portalRole", portalRole);
+  csrfToken = "";
+}
+
+async function request(path, options = {}, retryCsrf = true) {
   const headers = new Headers(options.headers);
+  headers.set("X-Portal-Role", portalRole);
+  const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(options.method);
   if (options.body) {
     headers.set("Content-Type", "application/json");
   }
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(options.method)) {
+  if (isMutation) {
     if (!csrfToken) {
       await refreshCsrfToken();
     }
@@ -19,6 +30,11 @@ async function request(path, options = {}) {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 400 && body.code === "csrf_invalid" && retryCsrf && isMutation) {
+      csrfToken = "";
+      await refreshCsrfToken();
+      return request(path, options, false);
+    }
     const error = new Error(body.error || `Yêu cầu thất bại (${response.status}).`);
     error.status = response.status;
     throw error;
@@ -28,6 +44,7 @@ async function request(path, options = {}) {
 
 export async function refreshCsrfToken() {
   const response = await fetch("/api/csrf-token", {
+    headers: { "X-Portal-Role": portalRole },
     credentials: "same-origin",
   });
   if (!response.ok) {
@@ -39,10 +56,11 @@ export async function refreshCsrfToken() {
 
 export const api = {
   session: () => request("/session"),
-  login: async (email, password) => {
+  login: async (email, password, role = "Student") => {
+    selectPortalRole(role);
     const result = await request("/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, role }),
     });
     csrfToken = result.csrf_token;
     return result;
@@ -54,7 +72,9 @@ export const api = {
     }),
   logout: async () => {
     const result = await request("/logout", { method: "POST" });
-    csrfToken = result.csrf_token;
+    sessionStorage.removeItem("novapath.portalRole");
+    portalRole = "Student";
+    csrfToken = "";
     return result;
   },
   dashboard: () => request("/dashboard"),

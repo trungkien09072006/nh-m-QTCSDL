@@ -156,6 +156,13 @@ input:focus { border-color: #8979ee; box-shadow: 0 0 0 3px #8979ee20; }
 .auth-card h1 { font-size: 24px; }
 .auth-description { margin-bottom: 24px; color: #8995a8; font-size: 13px; }
 .auth-card form { display: grid; gap: 17px; }
+.role-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
+.role-picker legend { margin-bottom: 8px; color: #707b8e; font-size: 11px; font-weight: 700; }
+.role-option { position: relative; display: block; cursor: pointer; }
+.role-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.role-option span { display: block; padding: 10px 6px; border: 1px solid var(--line); border-radius: 8px; color: #738096; font-size: 11px; text-align: center; }
+.role-option input:checked + span { border-color: var(--purple); background: #f3f1ff; color: var(--purple-dark); font-weight: 700; }
+.role-option input:focus-visible + span { outline: 2px solid var(--purple); outline-offset: 2px; }
 .auth-switch { margin: 22px 0 0; color: #8995a8; font-size: 12px; text-align: center; }
 .auth-switch .text-button { font-size: 12px; }
 .loading-screen { align-content: center; gap: 18px; color: #8995a8; font-size: 13px; }

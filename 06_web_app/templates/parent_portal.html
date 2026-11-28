@@ -55,7 +55,7 @@
 <body>
   <header>
     <strong>NovaPath · Cổng phụ huynh</strong>
-    <form action="{{ url_for('logout') }}" method="post">
+    <form action="{{ url_for('parent_portal.logout_parent') }}" method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit">Đăng xuất</button>
     </form>
@@ -69,7 +69,7 @@
 
     <section class="panel">
       <h2>Liên kết với học sinh</h2>
-      <p class="muted">Nhập email tài khoản học sinh. Học sinh cần chấp thuận yêu cầu trước khi bạn xem được dữ liệu.</p>
+      <p class="muted">Nhập email tài khoản học sinh. Nhà trường sẽ xác minh mối quan hệ phụ huynh trước khi cấp quyền xem tiến độ; học sinh không cần chấp thuận.</p>
       <form class="actions" method="post" action="{{ url_for('parent_portal.request_link') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label for="student-email">Email học sinh</label>
@@ -79,7 +79,7 @@
       {% if requests %}
         <h3>Yêu cầu đã gửi</h3>
         {% for item in requests %}
-          <div class="row">{{ item.StudentName }} <span class="muted">({{ item.StudentEmail }})</span> · <span class="status">{{ {'Pending':'Đang chờ học sinh','Accepted':'Đã liên kết','Rejected':'Đã từ chối'}.get(item.Status, item.Status) }}</span></div>
+          <div class="row">{{ item.StudentName }} <span class="muted">({{ item.StudentEmail }})</span> · <span class="status">{{ {'Pending':'Đang chờ nhà trường xác minh','Accepted':'Đã liên kết','Rejected':'Không được xác minh'}.get(item.Status, item.Status) }}</span></div>
         {% endfor %}
       {% endif %}
     </section>
@@ -102,7 +102,7 @@
           </article>
         {% endfor %}
       {% else %}
-        <p class="muted">Chưa có học sinh liên kết. Gửi yêu cầu ở phía trên để bắt đầu.</p>
+        <p class="muted">Chưa có học sinh liên kết. Gửi yêu cầu ở phía trên để nhà trường xác minh.</p>
       {% endif %}
     </section>
 

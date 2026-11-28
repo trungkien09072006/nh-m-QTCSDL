@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đăng nhập quản trị · NovaPath</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="auth-page">
+  <main class="auth-container">
+    <h1 class="brand-name">nova<span>path</span></h1>
+    <h2>Cổng quản trị viên</h2>
+    <p>Phiên đăng nhập Admin được tách riêng khỏi các tài khoản học tập và giảng dạy.</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="notice notice-{{ 'error' if category == 'error' else 'success' }}" role="alert">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label for="email">Email quản trị viên</label>
+        <input id="email" type="email" name="email" required class="form-control" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label for="password">Mật khẩu</label>
+        <input id="password" type="password" name="password" required class="form-control" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-primary">Đăng nhập Admin</button>
+    </form>
+    <p class="auth-footer"><a href="{{ url_for('login') }}">Quay lại trang đăng nhập chung</a></p>
+  </main>
+</body>
+</html>

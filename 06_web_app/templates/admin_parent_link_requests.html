@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Xác minh phụ huynh · NovaPath</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f4f6fb;color:#18243c;font:16px system-ui}
+    header{background:#17284a;color:#fff;padding:18px max(5%,calc((100% - 1000px)/2));display:flex;justify-content:space-between;align-items:center;gap:16px}
+    main{max-width:1000px;margin:28px auto;padding:0 20px}.panel{background:#fff;border-radius:12px;padding:22px;margin:18px 0;box-shadow:0 4px 20px #17284a0b}
+    .request{padding:16px 0;border-bottom:1px solid #e1e7f0}.request:last-child{border-bottom:0}
+    .actions{display:flex;gap:10px;margin-top:12px}.muted{color:#64728a}.notice{padding:13px;border-radius:7px;background:#ffe5e5;margin:12px 0}
+    button{border:0;border-radius:7px;padding:9px 14px;background:#285aca;color:#fff;font:inherit;cursor:pointer}
+    button.reject{background:#68758a}form{margin:0}
+  </style>
+</head>
+<body>
+  <header>
+    <strong>NovaPath · Xác minh phụ huynh</strong>
+    <form action="{{ url_for('admin_portal.admin_logout') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">Đăng xuất</button>
+    </form>
+  </header>
+  <main>
+    <h1>Yêu cầu liên kết phụ huynh</h1>
+    <p class="muted">Chỉ duyệt sau khi nhà trường xác minh được mối quan hệ phụ huynh/người giám hộ.</p>
+    {% if db_error %}<div class="notice" role="alert">{{ db_error }}</div>{% endif %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="notice" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    <section class="panel">
+      {% if requests %}
+        {% for item in requests %}
+          <article class="request">
+            <h2>{{ item.ParentName }} <span class="muted">({{ item.ParentEmail }})</span></h2>
+            <p>Muốn theo dõi: <strong>{{ item.StudentName }}</strong> ({{ item.StudentEmail }})</p>
+            <p class="muted">Gửi lúc {{ item.CreatedAt }}</p>
+            <div class="actions">
+              <form method="post" action="{{ url_for('admin_portal.review_parent_link_request', request_id=item.RequestID) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="decision" value="approve">
+                <button type="submit">Xác minh và cấp quyền</button>
+              </form>
+              <form method="post" action="{{ url_for('admin_portal.review_parent_link_request', request_id=item.RequestID) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="decision" value="reject">
+                <button class="reject" type="submit">Từ chối</button>
+              </form>
+            </div>
+          </article>
+        {% endfor %}
+      {% else %}
+        <p class="muted">Hiện không có yêu cầu nào chờ xác minh.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

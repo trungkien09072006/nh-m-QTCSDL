@@ -8,10 +8,10 @@ class ContentTests(unittest.TestCase):
   app.app.config.update(TESTING=True,SECRET_KEY='test')
   self.c=app.app.test_client()
  def teacher(self,role='Teacher'):
-  with self.c.session_transaction() as s:
+  with self.c.session_transaction('/teacher') as s:
    s.update(user_id=2,role=role,fullname='Giáo viên',_csrf_token='token')
  def test_login_required(self):
-  self.assertIn('/login',self.c.get('/teacher/').location)
+  self.assertIn('/login/teacher',self.c.get('/teacher/').location)
  def test_student_denied(self):
   self.teacher('Student')
   self.assertEqual(self.c.get('/teacher/').status_code,403)

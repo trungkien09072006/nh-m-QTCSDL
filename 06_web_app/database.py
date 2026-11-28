@@ -210,20 +210,7 @@ def load_dashboard_data(user_id: int) -> dict:
                     "tasks": [],
                     "recommendations": [],
                     "exams": [],
-                    "parent_link_requests": [],
                 }
-
-            parent_link_requests = _fetch_all(
-                cursor,
-                """
-                SELECT request.RequestID, parent.FullName AS ParentName, parent.Email AS ParentEmail
-                FROM dbo.ParentLinkRequests AS request
-                INNER JOIN dbo.Users AS parent ON parent.UserID = request.ParentID
-                WHERE request.StudentID = ? AND request.Status = 'Pending'
-                ORDER BY request.CreatedAt
-                """,
-                (user_id,),
-            )
 
             cursor.execute(
                 """
@@ -368,5 +355,4 @@ def load_dashboard_data(user_id: int) -> dict:
         ],
         "recommendations": recommendations,
         "exams": exams,
-        "parent_link_requests": parent_link_requests,
     }

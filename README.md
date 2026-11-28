@@ -24,7 +24,9 @@ npm install --prefix .\vite_app
 
 Nếu chưa tạo database/schema, mở `01_schema\00_run_all.sql` trong SQL Server Management Studio (SSMS), cập nhật biến `Root` ở đầu file thành đường dẫn thư mục dự án trên máy của bạn rồi chạy script. Cần có SQL Server và ODBC driver trước khi khởi động ứng dụng.
 
-Nếu database đã tồn tại từ phiên bản trước, chỉ chạy khối `ParentLinkRequests migration` trong `01_schema\00_run_all.sql` bằng SSMS; không chạy lại toàn bộ schema runner. Phụ huynh có thể đăng ký tại `/parent/register`, gửi yêu cầu bằng email học sinh; học sinh phải chấp thuận trên dashboard trước khi dữ liệu được chia sẻ. Giáo viên và quản trị viên xem báo cáo tại `/teacher/analytics`.
+Nếu database đã tồn tại từ phiên bản trước, chạy `01_schema\06_teacher_student_migration.sql` và khối `ParentLinkRequests migration` trong `01_schema\00_run_all.sql` bằng SSMS; không chạy lại toàn bộ schema runner. Migration phân công tài khoản mẫu `teacher@ai-edu.vn` cho học sinh `student1@gmail.com`. Phụ huynh có thể đăng ký tại `/parent/register` và gửi yêu cầu liên kết bằng email học sinh. Quản trị viên xác minh yêu cầu tại `/admin/parent-link-requests`; học sinh không cần chấp thuận. Phụ huynh chỉ xem được tiến độ sau khi yêu cầu được xác minh.
+
+Trang `/login` có lối vào riêng cho học sinh, phụ huynh và giáo viên. Tài khoản quản trị đăng nhập riêng tại `/admin/login`. Mỗi vai trò dùng cookie phiên riêng để có thể thao tác song song trong cùng trình duyệt. Tài khoản giáo viên được chuyển đến danh sách học sinh được phân công; phụ huynh đến cổng phụ huynh; học sinh đến dashboard học tập. Dữ liệu seed mẫu dùng mật khẩu `123456` cho `admin@ai-edu.vn`, `student1@gmail.com`, `parent1@gmail.com` và `teacher@ai-edu.vn`; chỉ dùng trong môi trường demo và hãy đổi mật khẩu nếu dùng dữ liệu thật.
 
 ## Khởi động website và app
 
@@ -54,7 +56,7 @@ $env:SQL_TRUSTED_CONNECTION = "true"
 
 Khi dùng SQL Server Authentication, đặt `SQL_TRUSTED_CONNECTION` thành `false` và cung cấp `SQL_USERNAME`, `SQL_PASSWORD` qua biến môi trường. Không lưu mật khẩu vào mã nguồn. Backend cũng đọc `FLASK_SECRET_KEY`; launcher tự tạo khóa ngẫu nhiên nếu biến này chưa được đặt.
 
-Vite chuyển tiếp các request `/api` tới Flask, do đó hai giao diện đọc/ghi cùng database. Có thể cần làm mới giao diện còn lại để xem dữ liệu mới. Nếu app gặp sự cố, website vẫn có thể mở riêng tại URL ở trên. Muốn truy cập từ thiết bị khác, cần triển khai trên máy chủ có HTTPS, cấu hình proxy `/api` tới Flask và kết nối tới cùng SQL Server; không đưa Flask development server trực tiếp ra Internet.
+Vite chuyển tiếp các request `/api`, `/parent`, `/teacher` và `/admin` tới Flask, do đó hai giao diện đọc/ghi cùng database. Có thể cần làm mới giao diện còn lại để xem dữ liệu mới. Nếu app gặp sự cố, website vẫn có thể mở riêng tại URL ở trên. Muốn truy cập từ thiết bị khác, cần triển khai trên máy chủ có HTTPS, cấu hình proxy các route này tới Flask và kết nối tới cùng SQL Server; không đưa Flask development server trực tiếp ra Internet.
 
 ## Cấu trúc chính
 
@@ -66,7 +68,7 @@ Vite chuyển tiếp các request `/api` tới Flask, do đó hai giao diện đ
 - `package.json`: lệnh `npm start` ở thư mục dự án.
 - `requirements.txt`: dependencies Python của backend.
 
-Học sinh có thể chọn đề đã duyệt trong mục **Làm bài thi**, trả lời câu hỏi và nộp bài để xem điểm cùng lời giải. Điểm bài thi được tính theo tỷ lệ câu đúng trên tổng số câu (thang 100); đáp án được tự lưu, có đồng hồ đếm ngược và bài sẽ tự nộp khi hết giờ. Đáp án đúng và lời giải chỉ được gửi sau khi nộp. Cổng phụ huynh chỉ hiển thị học sinh đã liên kết và được học sinh chấp thuận; báo cáo giáo viên tổng hợp chất lượng câu hỏi, gợi ý và xếp hạng từ các view SQL.
+Học sinh có thể chọn đề đã duyệt trong mục **Làm bài thi**, trả lời câu hỏi và nộp bài để xem điểm cùng lời giải. Điểm bài thi được tính theo tỷ lệ câu đúng trên tổng số câu (thang 100); đáp án được tự lưu, có đồng hồ đếm ngược và bài sẽ tự nộp khi hết giờ. Đáp án đúng và lời giải chỉ được gửi sau khi nộp. Cổng phụ huynh chỉ hiển thị học sinh đã được nhà trường xác minh và liên kết; báo cáo giáo viên tổng hợp chất lượng câu hỏi, gợi ý và xếp hạng từ các view SQL.
 
 ## Kiểm tra
 

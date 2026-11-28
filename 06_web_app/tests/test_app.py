@@ -13,8 +13,9 @@ class NovaPathRouteTests(unittest.TestCase):
     def setUp(self):
         web_app.app.config.update(TESTING=True, SECRET_KEY="test-key")
         self.client = web_app.app.test_client()
-        with self.client.session_transaction() as session:
-            session["_csrf_token"] = "test-csrf-token"
+        for path in ("/", "/login/parent", "/login/teacher", "/admin"):
+            with self.client.session_transaction(path) as session:
+                session["_csrf_token"] = "test-csrf-token"
 
     def test_dashboard_requires_login(self):
         response = self.client.get("/")
@@ -42,6 +43,7 @@ class NovaPathRouteTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/")
         with self.client.session_transaction() as session:
             self.assertNotIn("user_id", session)
 
@@ -91,6 +93,83 @@ class NovaPathRouteTests(unittest.TestCase):
             self.assertEqual(session["role"], "Student")
             self.assertNotIn("stale_value", session)
 
+    def test_role_specific_login_pages_render(self):
+        for portal, label in (
+            ("student", "học sinh"),
+            ("parent", "phụ huynh"),
+            ("teacher", "giáo viên"),
+        ):
+            with self.subTest(portal=portal):
+                response = self.client.get(f"/login/{portal}")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(f"Đăng nhập · {label}", response.get_data(as_text=True))
+
+    @patch("app.verify_login")
+    def test_role_specific_login_rejects_another_role(self, verify_login):
+        verify_login.return_value = {
+            "UserID": 3,
+            "Email": "student1@gmail.com",
+            "FullName": "Trần Văn Học",
+            "RoleName": "Student",
+        }
+
+        response = self.client.post(
+            "/login/teacher",
+            data={
+                "csrf_token": "test-csrf-token",
+                "email": "student1@gmail.com",
+                "password": "valid-password",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        with self.client.session_transaction() as session:
+            self.assertNotIn("user_id", session)
+
+    @patch("app.verify_login")
+    def test_teacher_login_redirects_to_assigned_students(self, verify_login):
+        verify_login.return_value = {
+            "UserID": 2,
+            "Email": "teacher@ai-edu.vn",
+            "FullName": "Giáo viên",
+            "RoleName": "Teacher",
+        }
+
+        response = self.client.post(
+            "/login/teacher",
+            data={
+                "csrf_token": "test-csrf-token",
+                "email": "teacher@ai-edu.vn",
+                "password": "valid-password",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.location.endswith("/teacher/students"))
+
+    @patch("app.verify_login")
+    def test_admin_login_via_shared_portal_points_to_separate_login(self, verify_login):
+        verify_login.return_value = {
+            "UserID": 1,
+            "Email": "admin@ai-edu.vn",
+            "FullName": "Quản trị viên",
+            "RoleName": "Admin",
+        }
+
+        response = self.client.post(
+            "/login",
+            data={
+                "csrf_token": "test-csrf-token",
+                "email": "admin@ai-edu.vn",
+                "password": "valid-password",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("cổng Admin riêng", response.get_data(as_text=True))
+        with self.client.session_transaction() as session:
+            self.assertNotIn("user_id", session)
+
     def test_registration_rejects_weak_password_before_database_access(self):
         with patch("app.register_user") as register_user:
             response = self.client.post(
@@ -132,7 +211,6 @@ class NovaPathRouteTests(unittest.TestCase):
                 user_id=3,
                 role="Student",
                 fullname="Trần Văn Học",
-                _flashes=[("success", "Đã chấp thuận liên kết phụ huynh.")],
             )
         load_data.return_value = {
             "student": {
@@ -154,9 +232,6 @@ class NovaPathRouteTests(unittest.TestCase):
             "tasks": [],
             "recommendations": [],
             "exams": [],
-            "parent_link_requests": [
-                {"RequestID": 3, "ParentName": "Phụ huynh", "ParentEmail": "parent@example.test"}
-            ],
         }
 
         response = self.client.get("/")
@@ -166,8 +241,7 @@ class NovaPathRouteTests(unittest.TestCase):
         self.assertIn("Chào Học", html)
         self.assertIn("950", html)
         self.assertIn("20%", html)
-        self.assertIn("Chấp thuận", html)
-        self.assertIn("Đã chấp thuận liên kết phụ huynh.", html)
+        self.assertNotIn("Yêu cầu liên kết phụ huynh", html)
         self.assertIn("mobile-logout", html)
         load_data.assert_called_once_with(3)
 
@@ -236,11 +310,17 @@ class PortalRouteTests(unittest.TestCase):
     def setUp(self):
         web_app.app.config.update(TESTING=True, SECRET_KEY="portal-test-key")
         self.client = web_app.app.test_client()
-        with self.client.session_transaction() as session:
-            session["_csrf_token"] = "portal-csrf-token"
+        for path in ("/", "/login/parent", "/login/teacher", "/admin"):
+            with self.client.session_transaction(path) as session:
+                session["_csrf_token"] = "portal-csrf-token"
 
     def login_as(self, role, user_id=4):
-        with self.client.session_transaction() as session:
+        paths = {
+            "Parent": "/parent",
+            "Teacher": "/teacher",
+            "Admin": "/admin",
+        }
+        with self.client.session_transaction(paths.get(role, "/")) as session:
             session.update(user_id=user_id, role=role, fullname="Người dùng")
 
     def csrf(self):
@@ -251,7 +331,8 @@ class PortalRouteTests(unittest.TestCase):
 
         response = self.client.get("/parent")
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/parent", response.location)
 
     def test_parent_registration_page_renders(self):
         response = self.client.get("/parent/register")
@@ -269,7 +350,7 @@ class PortalRouteTests(unittest.TestCase):
         }
 
         response = self.client.post(
-            "/login",
+            "/login/parent",
             data={
                 **self.csrf(),
                 "email": "parent@example.test",
@@ -316,7 +397,7 @@ class PortalRouteTests(unittest.TestCase):
         self.assertTrue(connect.called)
 
     @patch("parent_portal.pyodbc.connect")
-    def test_parent_link_request_is_pending_until_student_approval(self, connect):
+    def test_parent_link_request_waits_for_school_verification(self, connect):
         self.login_as("Parent", user_id=4)
         cursor = connect.return_value.cursor.return_value
         cursor.fetchone.side_effect = [(8,), None, None]
@@ -344,7 +425,7 @@ class PortalRouteTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Nếu email thuộc tài khoản học sinh hợp lệ", response.get_data(as_text=True))
+        self.assertIn("nhà trường xác minh", response.get_data(as_text=True))
         statements = [call.args[0] for call in cursor.execute.call_args_list]
         self.assertEqual(len(statements), 4)
         self.assertIn("LOWER(u.Email)", statements[0])
@@ -364,26 +445,8 @@ class PortalRouteTests(unittest.TestCase):
         connect.assert_not_called()
 
     @patch("parent_portal.pyodbc.connect")
-    def test_student_approval_creates_parent_student_link(self, connect):
+    def test_student_cannot_approve_parent_link_request(self, connect):
         self.login_as("Student", user_id=8)
-        cursor = connect.return_value.cursor.return_value
-        cursor.fetchone.return_value = (12, "Pending")
-
-        response = self.client.post(
-            "/parent/link-requests/3/respond",
-            data={**self.csrf(), "decision": "accept"},
-        )
-
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(cursor.execute.call_count, 3)
-        self.assertEqual(cursor.execute.call_args_list[0].args[1], (3, 8))
-        connect.return_value.commit.assert_called_once()
-
-    @patch("parent_portal.pyodbc.connect")
-    def test_student_cannot_approve_another_students_request(self, connect):
-        self.login_as("Student", user_id=8)
-        cursor = connect.return_value.cursor.return_value
-        cursor.fetchone.return_value = None
 
         response = self.client.post(
             "/parent/link-requests/3/respond",
@@ -391,24 +454,7 @@ class PortalRouteTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(cursor.execute.call_args.args[1], (3, 8))
-        connect.return_value.commit.assert_not_called()
-
-    @patch("parent_portal.pyodbc.connect")
-    def test_student_rejection_does_not_create_parent_link(self, connect):
-        self.login_as("Student", user_id=8)
-        cursor = connect.return_value.cursor.return_value
-        cursor.fetchone.return_value = (12, "Pending")
-
-        response = self.client.post(
-            "/parent/link-requests/3/respond",
-            data={**self.csrf(), "decision": "reject"},
-        )
-
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(cursor.execute.call_count, 2)
-        self.assertIn("UPDATE dbo.ParentLinkRequests", cursor.execute.call_args.args[0])
-        connect.return_value.commit.assert_called_once()
+        connect.assert_not_called()
 
     @patch("parent_portal.pyodbc.connect", side_effect=pyodbc.Error("unavailable"))
     def test_parent_dashboard_reports_database_failure(self, _connect):
@@ -424,7 +470,8 @@ class PortalRouteTests(unittest.TestCase):
 
         response = self.client.get("/teacher/analytics")
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/teacher", response.location)
 
     @patch("content.pyodbc.connect", side_effect=pyodbc.Error("unavailable"))
     def test_teacher_analytics_reports_database_failure(self, _connect):
@@ -541,6 +588,97 @@ class TutorRegressionTests(unittest.TestCase):
         self.assertEqual(response.get_json()["session_id"], 99)
         self.assertIn("OUTPUT INSERTED.SessionID", cursor.execute.call_args.args[0])
         connection.commit.assert_called_once()
+
+
+class TeacherPortalTests(unittest.TestCase):
+    def setUp(self):
+        web_app.app.config.update(TESTING=True, SECRET_KEY="teacher-portal-test-key")
+        self.client = web_app.app.test_client()
+        with self.client.session_transaction("/teacher") as session:
+            session.update(user_id=12, role="Teacher", fullname="Giáo viên")
+            session["_csrf_token"] = "teacher-csrf-token"
+
+    def test_student_cannot_open_teacher_student_list(self):
+        with self.client.session_transaction("/teacher") as session:
+            session["role"] = "Student"
+
+        response = self.client.get("/teacher/students")
+
+        self.assertEqual(response.status_code, 403)
+
+    @patch("content.pyodbc.connect", side_effect=pyodbc.Error("missing migration"))
+    def test_teacher_database_error_does_not_show_empty_student_state(self, _connect):
+        response = self.client.get("/teacher/students")
+
+        self.assertEqual(response.status_code, 503)
+        html = response.get_data(as_text=True)
+        self.assertIn("01_schema/06_teacher_student_migration.sql", html)
+        self.assertNotIn("Chưa có học sinh được phân công", html)
+
+    @patch("content._fetch_all", return_value=[
+        {
+            "StudentID": 3,
+            "FullName": "Học sinh mẫu",
+            "SchoolName": "Trường mẫu",
+            "TargetScore": 950,
+            "LatestScore": 720,
+            "AvgMastery": 0.6,
+            "StudyMin7d": 120,
+            "LastActivityAt": None,
+        }
+    ])
+    @patch("content.pyodbc.connect")
+    def test_teacher_list_only_queries_assigned_students(self, _connect, fetch_all):
+        response = self.client.get("/teacher/students")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Học sinh mẫu", response.get_data(as_text=True))
+        self.assertIn("/teacher/students/3", response.get_data(as_text=True))
+        self.assertEqual(fetch_all.call_args.args[2], (12,))
+        self.assertIn("WHERE assigned.TeacherID=?", fetch_all.call_args.args[1])
+
+    @patch("content._fetch_all", return_value=[])
+    @patch("content.pyodbc.connect")
+    def test_teacher_cannot_open_unassigned_student(self, _connect, fetch_all):
+        response = self.client.get("/teacher/students/99")
+
+        self.assertEqual(response.status_code, 404)
+        fetch_all.assert_called_once()
+        self.assertEqual(fetch_all.call_args.args[2], (12, 99))
+
+    @patch("content._fetch_all", side_effect=[
+        [{
+            "StudentID": 3,
+            "FullName": "Học sinh mẫu",
+            "SchoolName": "Trường mẫu",
+            "TargetScore": 950,
+            "ExamDate": None,
+            "DaysToExam": None,
+            "AvgMastery": 0.6,
+            "SubmittedAttempts": 2,
+            "BestScore": 800,
+            "LatestScore": 720,
+            "StudyMin7d": 120,
+            "LastActivityAt": None,
+            "PredictedScore": 810,
+            "ProbReachTarget": 0.4,
+        }],
+        [{"SubjectName": "Logic", "CompetencyName": "Suy luận", "MasteryPercent": 60,
+          "MasteryLevel": "Trung bình", "NeedsReview": 1, "AttemptCount": 4}],
+        [{"AlertLevel": "Trung bình", "AlertSummary": "Cần ôn tập."}],
+        [{"ReadinessScore": 55, "ReadinessLevel": "Cần tăng tốc", "DaysToExam": 30}],
+    ])
+    @patch("content.pyodbc.connect")
+    def test_assigned_student_detail_renders_progress(self, _connect, fetch_all):
+        response = self.client.get("/teacher/students/3")
+
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        self.assertIn("Học sinh mẫu", html)
+        self.assertIn("Cần tăng tốc", html)
+        self.assertIn("Suy luận", html)
+        self.assertEqual(fetch_all.call_count, 4)
+        self.assertEqual(fetch_all.call_args_list[0].args[2], (12, 3))
 
 
 if __name__ == "__main__":

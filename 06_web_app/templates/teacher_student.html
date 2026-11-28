@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tiến độ học sinh · NovaPath</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f4f6fb;color:#18243c;font:16px system-ui}
+    header{background:#17284a;color:#fff;padding:18px max(5%,calc((100% - 1100px)/2));display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+    nav{display:flex;gap:14px;align-items:center;flex-wrap:wrap}nav a{color:#dce7ff}
+    main{max-width:1100px;margin:28px auto;padding:0 20px}.panel{background:#fff;border-radius:12px;padding:22px;margin:18px 0;box-shadow:0 4px 20px #17284a0b}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.metric{padding:14px;border:1px solid #e1e7f0;border-radius:9px}
+    .metric small{display:block;color:#64728a}.metric strong{display:block;margin-top:5px;font-size:20px}
+    table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;border-bottom:1px solid #e1e7f0}
+    .notice{padding:13px;border-radius:7px;background:#fff2d6;margin:12px 0}.muted{color:#64728a}a{color:#285aca}
+    button{border:0;border-radius:7px;padding:9px 14px;background:#285aca;color:#fff;font:inherit;cursor:pointer}
+    .scroll{overflow-x:auto}
+  </style>
+</head>
+<body>
+  <header>
+    <strong>NovaPath · Cổng giáo viên</strong>
+    <nav aria-label="Điều hướng giáo viên">
+      <a href="{{ url_for('content.teacher_students') }}">Danh sách học sinh</a>
+      <a href="{{ url_for('content.analytics') }}">Phân tích</a>
+      <form action="{{ url_for('content.logout_teacher') }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">Đăng xuất</button>
+      </form>
+    </nav>
+  </header>
+  <main>
+    <p><a href="{{ url_for('content.teacher_students') }}">← Học sinh của tôi</a></p>
+    {% if db_error %}<div class="notice" role="alert">{{ db_error }}</div>{% endif %}
+    {% if student %}
+      <h1>{{ student.FullName }}</h1>
+      <p class="muted">{{ student.SchoolName or "Chưa cập nhật trường học" }}</p>
+      <section class="panel grid" aria-label="Tổng quan học tập">
+        <div class="metric"><small>Điểm mục tiêu</small><strong>{{ student.TargetScore }} / 1200</strong></div>
+        <div class="metric"><small>Điểm thi gần nhất</small><strong>{{ student.LatestScore if student.LatestScore is not none else "Chưa có" }}</strong></div>
+        <div class="metric"><small>Điểm dự đoán</small><strong>{{ "%.0f"|format(student.PredictedScore) if student.PredictedScore is not none else "Chưa có" }}</strong></div>
+        <div class="metric"><small>Thành thạo trung bình</small><strong>{{ ((student.AvgMastery or 0) * 100)|round|int }}%</strong></div>
+        <div class="metric"><small>Lượt thi đã nộp</small><strong>{{ student.SubmittedAttempts or 0 }}</strong></div>
+        <div class="metric"><small>Thời gian học 7 ngày</small><strong>{{ student.StudyMin7d or 0 }} phút</strong></div>
+      </section>
+      <section class="panel">
+        <h2>Mức độ sẵn sàng thi</h2>
+        {% if readiness %}
+          <p><strong>{{ readiness.ReadinessLevel }}</strong> · {{ readiness.ReadinessScore }} / 100
+            {% if readiness.DaysToExam is not none %}· {{ readiness.DaysToExam }} ngày đến kỳ thi{% endif %}
+          </p>
+        {% else %}<p class="muted">Chưa đủ dữ liệu để tính mức độ sẵn sàng.</p>{% endif %}
+      </section>
+      <section class="panel">
+        <h2>Cảnh báo</h2>
+        {% if alerts %}
+          {% for alert in alerts %}<p><strong>{{ alert.AlertLevel }}</strong> · {{ alert.AlertSummary }}</p>{% endfor %}
+        {% else %}<p class="muted">Không có cảnh báo hiện tại.</p>{% endif %}
+      </section>
+      <section class="panel">
+        <h2>Năng lực học tập</h2>
+        {% if competencies %}
+          <div class="scroll"><table>
+            <thead><tr><th>Môn</th><th>Năng lực</th><th>Mức độ</th><th>Số lượt</th></tr></thead>
+            <tbody>
+              {% for item in competencies %}
+                <tr><td>{{ item.SubjectName }}</td><td>{{ item.CompetencyName }}</td><td>{{ item.MasteryLevel }} · {{ item.MasteryPercent }}%</td><td>{{ item.AttemptCount }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+        {% else %}<p class="muted">Chưa có dữ liệu năng lực.</p>{% endif %}
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

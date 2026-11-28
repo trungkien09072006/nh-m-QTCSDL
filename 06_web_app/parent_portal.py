@@ -1,4 +1,4 @@
-"""Parent dashboard and student-approved parent/student account linking."""
+"""Parent dashboard and school-verified parent/student account linking."""
 
 from contextlib import closing
 
@@ -12,7 +12,7 @@ bp = Blueprint("parent_portal", __name__)
 
 def _require_role(role):
     if "user_id" not in session:
-        return redirect(url_for("login"))
+        return redirect(url_for("login", portal=role.lower()))
     if session.get("role") != role:
         abort(403)
     return None
@@ -37,7 +37,7 @@ def register_parent():
         try:
             if register_user(email, password, fullname, role_name="Parent"):
                 flash("Tạo tài khoản phụ huynh thành công. Hãy đăng nhập để tiếp tục.", "success")
-                return redirect(url_for("login"))
+                return redirect(url_for("login", portal="parent"))
             flash("Email đã tồn tại hoặc không thể tạo tài khoản.", "error")
         except pyodbc.Error:
             current_app.logger.exception("Không thể tạo tài khoản phụ huynh")
@@ -114,6 +114,15 @@ def dashboard():
     )
 
 
+@bp.post("/parent/logout")
+def logout_parent():
+    denied = _require_role("Parent")
+    if denied:
+        return denied
+    session.clear()
+    return redirect("/")
+
+
 @bp.post("/parent/link-requests")
 def request_link():
     denied = _require_role("Parent")
@@ -163,7 +172,7 @@ def request_link():
                         )
                         connection.commit()
         flash(
-            "Nếu email thuộc tài khoản học sinh hợp lệ, yêu cầu sẽ chờ học sinh chấp thuận.",
+            "Nếu tài khoản học sinh hợp lệ, yêu cầu sẽ được gửi nhà trường xác minh.",
             "success",
         )
     except pyodbc.Error:
@@ -177,66 +186,3 @@ def request_link():
             requests=[],
         ), 503
     return redirect(url_for("parent_portal.dashboard"))
-
-
-@bp.post("/parent/link-requests/<int:request_id>/respond")
-def respond_to_link(request_id):
-    denied = _require_role("Student")
-    if denied:
-        return denied
-    decision = request.form.get("decision")
-    if decision not in ("accept", "reject"):
-        abort(400)
-    try:
-        with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
-            with closing(connection.cursor()) as cursor:
-                cursor.execute(
-                    """
-                    SELECT ParentID, Status
-                    FROM dbo.ParentLinkRequests WITH (UPDLOCK, HOLDLOCK)
-                    WHERE RequestID = ? AND StudentID = ?
-                    """,
-                    (request_id, session["user_id"]),
-                )
-                link_request = cursor.fetchone()
-                if link_request is None:
-                    abort(404)
-                parent_id, status = link_request
-                if status != "Pending":
-                    flash("Yêu cầu này đã được xử lý trước đó.", "error")
-                elif decision == "accept":
-                    cursor.execute(
-                        """
-                        IF NOT EXISTS (
-                            SELECT 1 FROM dbo.ParentStudent
-                            WHERE ParentID = ? AND StudentID = ?
-                        )
-                            INSERT INTO dbo.ParentStudent (ParentID, StudentID) VALUES (?, ?)
-                        """,
-                        (parent_id, session["user_id"], parent_id, session["user_id"]),
-                    )
-                    cursor.execute(
-                        """
-                        UPDATE dbo.ParentLinkRequests
-                        SET Status = 'Accepted', ResolvedAt = SYSDATETIME()
-                        WHERE RequestID = ?
-                        """,
-                        (request_id,),
-                    )
-                    connection.commit()
-                    flash("Đã chấp thuận liên kết phụ huynh.", "success")
-                else:
-                    cursor.execute(
-                        """
-                        UPDATE dbo.ParentLinkRequests
-                        SET Status = 'Rejected', ResolvedAt = SYSDATETIME()
-                        WHERE RequestID = ?
-                        """,
-                        (request_id,),
-                    )
-                    connection.commit()
-                    flash("Đã từ chối yêu cầu liên kết.", "success")
-    except pyodbc.Error:
-        current_app.logger.exception("Không thể xử lý yêu cầu liên kết phụ huynh")
-        flash("Không thể xử lý yêu cầu do lỗi SQL Server.", "error")
-    return redirect(url_for("dashboard"))

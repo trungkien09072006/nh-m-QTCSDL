@@ -13,6 +13,13 @@ class ApiRouteTests(unittest.TestCase):
     def headers(self, token=None):
         return {"X-CSRF-Token": token or self.csrf_token}
 
+    def role_headers(self, role):
+        token = self.client.get(
+            "/api/csrf-token",
+            headers={"X-Portal-Role": role},
+        ).get_json()["csrf_token"]
+        return {"X-CSRF-Token": token, "X-Portal-Role": role}
+
     def test_api_session_starts_unauthenticated(self):
         response = self.client.get("/api/session")
 
@@ -50,6 +57,7 @@ class ApiRouteTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["code"], "csrf_invalid")
         verify_login.assert_not_called()
 
     @patch("app.verify_login")
@@ -63,12 +71,137 @@ class ApiRouteTests(unittest.TestCase):
 
         response = self.client.post(
             "/api/login",
-            json={"email": "teacher@example.test", "password": "valid-password"},
-            headers=self.headers(),
+            json={
+                "email": "teacher@example.test",
+                "password": "valid-password",
+                "role": "Teacher",
+            },
+            headers=self.role_headers("Teacher"),
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["user"]["role"], "Teacher")
+
+    @patch("app.verify_login")
+    def test_api_login_rejects_role_mismatch_without_creating_session(self, verify_login):
+        verify_login.return_value = {
+            "UserID": 4,
+            "Email": "teacher@example.test",
+            "FullName": "Test Teacher",
+            "RoleName": "Teacher",
+        }
+
+        response = self.client.post(
+            "/api/login",
+            json={
+                "email": "teacher@example.test",
+                "password": "valid-password",
+                "role": "Parent",
+            },
+            headers=self.role_headers("Parent"),
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIsNone(self.client.get("/api/session").get_json()["user"])
+
+    @patch("app.verify_login")
+    def test_api_role_sessions_can_stay_signed_in_together(self, verify_login):
+        users = [
+            {
+                "UserID": 3,
+                "Email": "student@example.test",
+                "FullName": "Student",
+                "RoleName": "Student",
+            },
+            {
+                "UserID": 4,
+                "Email": "parent@example.test",
+                "FullName": "Parent",
+                "RoleName": "Parent",
+            },
+            {
+                "UserID": 5,
+                "Email": "teacher@example.test",
+                "FullName": "Teacher",
+                "RoleName": "Teacher",
+            },
+        ]
+        verify_login.side_effect = users
+
+        for user in users:
+            response = self.client.post(
+                "/api/login",
+                json={
+                    "email": user["Email"],
+                    "password": "valid-password",
+                    "role": user["RoleName"],
+                },
+                headers=self.role_headers(user["RoleName"]),
+            )
+            self.assertEqual(response.status_code, 200)
+
+        for user in users:
+            with self.subTest(role=user["RoleName"]):
+                response = self.client.get(
+                    "/api/session",
+                    headers={"X-Portal-Role": user["RoleName"]},
+                )
+                self.assertEqual(response.get_json()["user"]["id"], user["UserID"])
+
+    @patch("parent_portal._fetch_all", side_effect=[[], [], []])
+    @patch("parent_portal.pyodbc.connect")
+    @patch("app.verify_login")
+    def test_web_parent_and_vite_teacher_sessions_do_not_conflict(
+        self, verify_login, _connect, _fetch_all
+    ):
+        with self.client.session_transaction("/parent") as parent_session:
+            parent_session.update(
+                user_id=4,
+                role="Parent",
+                fullname="Parent",
+                _csrf_token="parent-csrf-token",
+            )
+
+        teacher = {
+            "UserID": 5,
+            "Email": "teacher@example.test",
+            "FullName": "Teacher",
+            "RoleName": "Teacher",
+        }
+        verify_login.return_value = teacher
+        teacher_headers = self.role_headers("Teacher")
+        teacher_login = self.client.post(
+            "/api/login",
+            json={
+                "email": teacher["Email"],
+                "password": "valid-password",
+                "role": "Teacher",
+            },
+            headers=teacher_headers,
+        )
+
+        self.assertEqual(teacher_login.status_code, 200)
+        self.assertEqual(self.client.get("/parent").status_code, 200)
+        self.assertEqual(
+            self.client.get(
+                "/api/session",
+                headers={"X-Portal-Role": "Teacher"},
+            ).get_json()["user"]["id"],
+            teacher["UserID"],
+        )
+
+        parent_logout = self.client.post(
+            "/parent/logout",
+            data={"csrf_token": "parent-csrf-token"},
+        )
+        self.assertEqual(parent_logout.status_code, 302)
+        self.assertEqual(
+            self.client.get(
+                "/api/session",
+                headers={"X-Portal-Role": "Teacher"},
+            ).get_json()["user"]["id"],
+            teacher["UserID"],
+        )
 
     @patch("app.register_user", return_value=True)
     def test_api_register_uses_post_and_returns_created(self, register_user):
