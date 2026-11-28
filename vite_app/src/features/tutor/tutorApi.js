@@ -59,6 +59,11 @@ export const tutorApi = {
       method: "POST",
       body: JSON.stringify({ message, question_id }),
     }),
+  generate: (parameters) =>
+    tutorFetch("/generate", {
+      method: "POST",
+      body: JSON.stringify(parameters),
+    }),
   clearSession: () =>
     tutorFetch("/clear", {
       method: "POST",

@@ -1,15 +1,17 @@
 import json
 import logging
 import os
-import urllib.error
-import urllib.parse
-import urllib.request
+import sqlite3
 from contextlib import closing
 from datetime import datetime
 
 import pyodbc
 from flask import Blueprint, jsonify, request, session
 from database import _connection_string, _row_as_dict
+from tutor_generation import generate_question, grounded_reply
+from tutor_rag import gemini_request, search
+
+DEFAULT_MODEL = "gemini-3.8-flash"
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ def _get_tutor_user():
     }, None
 
 
-def _call_gemini_api(api_key: str, user_prompt: str, question_context: dict = None) -> tuple[str | None, str]:
+def _call_gemini_api(api_key: str, user_prompt: str, question_context: dict = None, *, json_mode=False) -> tuple[str | None, str]:
     """
     Gọi Google Gemini API (mô hình ngoài) để giải thích câu hỏi học tập.
     Trả về (câu_trả_lời, tên_model). Nếu lỗi hoặc không có key, trả về (None, lý_do).
@@ -38,8 +40,7 @@ def _call_gemini_api(api_key: str, user_prompt: str, question_context: dict = No
     if not api_key or not api_key.strip():
         return None, "Chưa cấu hình GEMINI_API_KEY"
 
-    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key.strip()}"
+    model = os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
 
     system_instruction = (
         "Bạn là AI Tutor thông minh, thân thiện của hệ thống luyện thi Đánh Giá Năng Lực NovaPath. "
@@ -62,7 +63,9 @@ def _call_gemini_api(api_key: str, user_prompt: str, question_context: dict = No
         prompt_parts.append("--- HẾT DỮ LIỆU CÂU HỎI ---")
 
     prompt_parts.append(f"Yêu cầu / Câu hỏi của học sinh: {user_prompt}")
-    full_prompt = "\n".join(prompt_parts)
+    full_prompt = user_prompt if json_mode else "\n".join(prompt_parts)
+    if json_mode:
+        system_instruction += " Hãy tuân thủ đúng định dạng JSON được yêu cầu."
 
     payload = {
         "system_instruction": {
@@ -75,36 +78,32 @@ def _call_gemini_api(api_key: str, user_prompt: str, question_context: dict = No
         ],
         "generationConfig": {
             "temperature": 0.4,
-            "maxOutputTokens": 1024,
+            "maxOutputTokens": 4096,
         }
     }
 
+    if json_mode:
+        payload["generationConfig"]["responseMimeType"] = "application/json"
+
     try:
-        req = urllib.request.Request(
-            endpoint,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=12) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            candidates = res_data.get("candidates", [])
-            if candidates:
-                parts = candidates[0].get("content", {}).get("parts", [])
-                if parts and "text" in parts[0]:
-                    return parts[0]["text"].strip(), f"Google Gemini ({model})"
-            return None, "Không nhận được nội dung hợp lệ từ Gemini"
-    except Exception as exc:
-        logger.warning("Không thể gọi Gemini API: %s. Chuyển sang fallback tri thức nội bộ.", exc)
-        return None, f"Lỗi kết nối Gemini: {str(exc)}"
+        result = gemini_request(api_key.strip(), model, "generateContent", payload)
+        candidates = result.get("candidates", [])
+        if candidates and candidates[0].get("finishReason", "STOP") == "STOP":
+            parts = candidates[0].get("content", {}).get("parts", [])
+            reply = "".join(part.get("text", "") for part in parts if not part.get("thought")).strip()
+            if reply:
+                return reply, f"Google Gemini ({model})"
+    except (OSError, ValueError, TypeError, KeyError):
+        logger.warning("Không thể gọi Gemini API", exc_info=True)
+    return None, "Không nhận được nội dung hợp lệ từ Gemini"
 
 
 def _generate_internal_explanation(cursor, student_id: int, user_message: str, question_id: int = None) -> tuple[str, str]:
     """
-    Thuật toán fallback trích xuất tri thức nội bộ từ SQL Server (Rule-based / RAG từ DB).
+    Thuật toán fallback trích xuất tri thức nội bộ từ SQL Server (Rule-based).
     Đảm bảo theo rubric: Nêu rõ đây là thuật toán luật / trích xuất DB chứ không mạo danh AI ngoài.
     """
-    model_name = "NovaPath Knowledge Base (Rule-based / RAG nội bộ)"
+    model_name = "NovaPath Knowledge Base (Rule-based)"
 
     if question_id:
         cursor.execute(
@@ -139,8 +138,8 @@ def _generate_internal_explanation(cursor, student_id: int, user_message: str, q
             explanation_text = q_row.get("Explanation") or "Câu hỏi này hiện chưa có lời giải chi tiết từ giáo viên."
 
             reply = (
-                f"> **[Chế độ: Tri thức NovaPath (RAG nội bộ)]**\n"
-                f"> *(Chưa kích hoạt GEMINI_API_KEY nên hệ thống trích xuất từ dữ liệu chuẩn của ngân hàng câu hỏi)*\n\n"
+                f"> **Trích từ ngân hàng câu hỏi NovaPath**\n"
+                "\n"
                 f"### 📘 Giải thích chi tiết cho câu hỏi (Mã #{question_id})\n"
                 f"- **Chủ đề / Năng lực:** {q_row['CompetencyName']} (Độ khó: {q_row['Difficulty']}/5)\n"
                 f"- **Câu hỏi:** *{q_row['Content']}*\n"
@@ -198,8 +197,8 @@ def tutor_status():
     """Kiểm tra tình trạng cấu hình AI Model."""
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
     has_key = bool(gemini_key)
-    active_model = f"Google Gemini ({os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')})" if has_key else "NovaPath Knowledge Base"
-    mode = "EXTERNAL_AI" if has_key else "INTERNAL_RAG"
+    active_model = f"Google Gemini ({os.getenv('GEMINI_MODEL', DEFAULT_MODEL)})" if has_key else "NovaPath Knowledge Base"
+    mode = "EXTERNAL_AI" if has_key else "INTERNAL_KB"
 
     return jsonify(
         configured=has_key,
@@ -207,7 +206,7 @@ def tutor_status():
         active_model=active_model,
         instructions=(
             "Đặt biến môi trường GEMINI_API_KEY=<khóa_api_của_bạn> để kích hoạt mô hình sinh phản hồi trực tiếp từ Google Gemini. "
-            "Nếu không đặt, hệ thống tự động trích xuất lời giải chuẩn xác từ CSDL SQL Server (Rule-based / RAG)."
+            "Nếu không đặt, hệ thống tự động trích xuất lời giải chuẩn xác từ CSDL SQL Server."
         )
     )
 
@@ -321,14 +320,21 @@ def ask_tutor():
     if not isinstance(data, dict):
         return jsonify(error="Dữ liệu yêu cầu không hợp lệ."), 400
 
-    message = (data.get("message") or "").strip()
+    message = data.get("message")
+    if message is None:
+        message = ""
+    if not isinstance(message, str) or len(message) > 2000:
+        return jsonify(error="Nội dung câu hỏi phải là văn bản tối đa 2.000 ký tự."), 400
+    message = message.strip()
     question_id = data.get("question_id")
-
-    if question_id is not None:
+    if isinstance(question_id, str):
         try:
             question_id = int(question_id)
-        except (ValueError, TypeError):
+        except ValueError:
             return jsonify(error="Mã câu hỏi không hợp lệ."), 400
+
+    if question_id is not None and (type(question_id) is not int or not 1 <= question_id <= 2147483647):
+        return jsonify(error="Mã câu hỏi không hợp lệ."), 400
 
     if not message and not question_id:
         return jsonify(error="Vui lòng nhập nội dung câu hỏi hoặc chọn câu hỏi cần giải thích."), 400
@@ -337,31 +343,7 @@ def ask_tutor():
     try:
         with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
             with closing(connection.cursor()) as cursor:
-                # 1. Tìm hoặc tạo phiên TutorSession
-                cursor.execute(
-                    """
-                    SELECT TOP 1 SessionID
-                    FROM TutorSessions
-                    WHERE StudentID = ?
-                    ORDER BY StartedAt DESC, SessionID DESC
-                    """,
-                    (student_id,)
-                )
-                sess_row = cursor.fetchone()
-                if sess_row:
-                    session_id = sess_row[0]
-                else:
-                    cursor.execute(
-                        """
-                        INSERT INTO TutorSessions (StudentID)
-                        OUTPUT INSERTED.SessionID
-                        VALUES (?)
-                        """,
-                        (student_id,)
-                    )
-                    session_id = int(cursor.fetchone()[0])
-
-                # 2. Thu thập context câu hỏi nếu có
+                # Thu thập ngữ cảnh câu hỏi nếu có
                 q_context = None
                 if question_id:
                     cursor.execute(
@@ -391,30 +373,73 @@ def ask_tutor():
                             "options": opts,
                         }
 
-                # 3. Lưu tin nhắn USER
-                user_msg_content = message or f"Nhờ AI Tutor giải thích câu hỏi mã #{question_id}."
-                cursor.execute(
-                    """
-                    INSERT INTO TutorMessages (SessionID, Sender, Content, QuestionID)
-                    VALUES (?, 'USER', ?, ?)
-                    """,
-                    (session_id, user_msg_content, question_id)
-                )
+                if question_id is not None and not q_context:
+                    return jsonify(error="Không tìm thấy câu hỏi."), 404
 
-                # 4. Tạo phản hồi từ AI (Gemini ngoài hoặc Knowledge-base nội bộ)
+                user_msg_content = message or f"Nhờ AI Tutor giải thích câu hỏi mã #{question_id}."
                 gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
                 reply_text = None
                 model_used = None
-
+                origin = "novapath"
                 if gemini_key:
-                    reply_text, model_used = _call_gemini_api(gemini_key, user_msg_content, q_context)
+                    query = user_msg_content
+                    if q_context:
+                        query += f"\n{q_context['competency']}\n{q_context['content'][:1200]}"
+                    try:
+                        sources = search(gemini_key, query)
+                    except (ImportError, OSError, ValueError, TypeError, KeyError, sqlite3.Error):
+                        logger.warning("Không thể truy xuất tài liệu Tutor", exc_info=True)
+                        sources = []
+                    if sources:
+                        reply_text, model_used = grounded_reply(
+                            _call_gemini_api, gemini_key, user_msg_content, q_context, sources
+                        )
+                        if reply_text:
+                            origin = "document"
+                    if not reply_text:
+                        reply_text, model_used = _call_gemini_api(gemini_key, user_msg_content, q_context)
+                        if reply_text:
+                            origin = "ai_generated"
+                            reply_text = "> **Nội dung AI tự sinh · Không có trích dẫn tài liệu**\n\n" + reply_text
 
                 if not reply_text:
                     reply_text, model_used = _generate_internal_explanation(
                         cursor, student_id, user_msg_content, question_id
                     )
 
-                # 5. Lưu tin nhắn AI
+                # Tìm hoặc tạo phiên TutorSession
+                cursor.execute(
+                    """
+                    SELECT TOP 1 SessionID
+                    FROM TutorSessions
+                    WHERE StudentID = ?
+                    ORDER BY StartedAt DESC, SessionID DESC
+                    """,
+                    (student_id,)
+                )
+                sess_row = cursor.fetchone()
+                if sess_row:
+                    session_id = sess_row[0]
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO TutorSessions (StudentID)
+                        OUTPUT INSERTED.SessionID
+                        VALUES (?)
+                        """,
+                        (student_id,)
+                    )
+                    session_id = int(cursor.fetchone()[0])
+
+                cursor.execute(
+                    """
+                    INSERT INTO TutorMessages (SessionID, Sender, Content, QuestionID)
+                    VALUES (?, 'USER', ?, ?)
+                    """,
+                    (session_id, user_msg_content, question_id),
+                )
+
+                # Lưu tin nhắn AI
                 cursor.execute(
                     """
                     INSERT INTO TutorMessages (SessionID, Sender, Content, QuestionID)
@@ -423,7 +448,7 @@ def ask_tutor():
                     (session_id, reply_text, question_id)
                 )
 
-                # 6. Ghi nhận nhật ký học tập (StudyLogs)
+                # Ghi nhận nhật ký học tập (StudyLogs)
                 cursor.execute(
                     """
                     INSERT INTO StudyLogs (StudentID, ActivityType, DurationMin)
@@ -439,6 +464,7 @@ def ask_tutor():
                     session_id=session_id,
                     reply=reply_text,
                     model_used=model_used,
+                    origin=origin,
                     question_id=question_id,
                     sent_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 )
@@ -446,6 +472,58 @@ def ask_tutor():
     except pyodbc.Error:
         logger.exception("Lỗi khi xử lý hỏi đáp AI Tutor trong CSDL")
         return jsonify(error="Lỗi lưu trữ dữ liệu hội thoại trong SQL Server."), 503
+
+
+@bp.post("/generate")
+def generate_tutor_question():
+    _, error = _get_tutor_user()
+    if error:
+        return error
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="Dữ liệu yêu cầu không hợp lệ."), 400
+
+    topic = data.get("topic", "")
+    difficulty = data.get("difficulty")
+    question_id = data.get("question_id")
+    if not isinstance(topic, str) or len(topic.strip()) > 160:
+        return jsonify(error="Chủ đề phải là văn bản tối đa 160 ký tự."), 400
+    if type(difficulty) is not int or not 1 <= difficulty <= 5:
+        return jsonify(error="Chọn độ khó từ 1 đến 5."), 400
+    if question_id is not None and (type(question_id) is not int or not 1 <= question_id <= 2147483647):
+        return jsonify(error="Mã câu hỏi không hợp lệ."), 400
+    if not topic.strip() and question_id is None:
+        return jsonify(error="Nhập chủ đề hoặc chọn một câu hỏi mẫu."), 400
+
+    key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not key:
+        return jsonify(error="Chưa cấu hình Gemini để sinh câu hỏi."), 503
+
+    reference = None
+    if question_id is not None:
+        try:
+            with closing(pyodbc.connect(_connection_string(), timeout=5)) as connection:
+                with closing(connection.cursor()) as cursor:
+                    cursor.execute(
+                        """
+                        SELECT q.Content AS content, c.CompetencyName AS topic
+                        FROM Questions q JOIN Competencies c ON c.CompetencyID = q.CompetencyID
+                        WHERE q.QuestionID = ?
+                        """,
+                        (question_id,),
+                    )
+                    reference = _row_as_dict(cursor, cursor.fetchone())
+        except pyodbc.Error:
+            logger.exception("Không thể tải câu hỏi mẫu")
+            return jsonify(error="Không thể tải câu hỏi mẫu."), 503
+        if not reference:
+            return jsonify(error="Không tìm thấy câu hỏi mẫu."), 404
+
+    question = generate_question(_call_gemini_api, key, topic.strip() or reference["topic"], difficulty, reference)
+    if question is None:
+        return jsonify(error="Chưa tạo được câu hỏi đạt kiểm tra chất lượng. Vui lòng thử lại."), 502
+    return jsonify(question=question)
 
 
 @bp.post("/clear")

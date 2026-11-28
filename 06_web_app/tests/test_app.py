@@ -487,6 +487,7 @@ class TutorRegressionTests(unittest.TestCase):
         self.assertEqual(response.get_json()["session_id"], 10)
         self.assertEqual(response.get_json()["messages"][0]["content"], "Em chưa hiểu câu này")
 
+    @patch.dict("os.environ", {"GEMINI_API_KEY": ""})
     def test_ask_creates_tutor_session_from_inserted_id(self):
         with patch("tutor_api.pyodbc.connect") as connect:
             connection = MagicMock()
@@ -494,10 +495,10 @@ class TutorRegressionTests(unittest.TestCase):
             connect.return_value = connection
             connection.cursor.return_value = cursor
             cursor.fetchone.side_effect = [
+                (1, "Cho dãy số 2, 6, 12...", 3, "Quy luật n*(n+1)", "Tư duy logic"),
+                (1, "Cho dãy số 2, 6, 12...", 3, "Quy luật n*(n+1)", "Tư duy logic"),
                 None,
                 (10,),
-                (1, "Cho dãy số 2, 6, 12...", 3, "Quy luật n*(n+1)", "Tư duy logic"),
-                (1, "Cho dãy số 2, 6, 12...", 3, "Quy luật n*(n+1)", "Tư duy logic"),
             ]
             cursor.fetchall.side_effect = [
                 [("A", "40", 0), ("B", "42", 1)],

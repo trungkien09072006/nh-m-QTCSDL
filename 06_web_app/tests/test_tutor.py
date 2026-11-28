@@ -1,4 +1,5 @@
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -125,6 +126,7 @@ class TutorApiTests(unittest.TestCase):
         self.assertEqual(data["session_id"], 10)
         self.assertTrue(len(data["messages"]) >= 1)
 
+    @patch.dict(os.environ, {"GEMINI_API_KEY": ""})
     @patch("tutor_api.pyodbc.connect")
     def test_ask_tutor_internal_fallback(self, mock_connect):
         """Học sinh hỏi giải thích câu hỏi cụ thể khi không có key ngoài."""
@@ -137,9 +139,9 @@ class TutorApiTests(unittest.TestCase):
 
         # Mock tìm session_id = 10
         mock_cursor.fetchone.side_effect = [
-            (10,), # Session có sẵn
             (1, "Cho dãy số 2, 6, 12...", 3, "Quy luật n*(n+1)", "Tư duy logic"), # Question
             (1, "Cho dãy số 2, 6, 12...", 3, "Quy luật n*(n+1)", "Tư duy logic"), # Trong _generate_internal_explanation
+            (10,), # Session có sẵn
         ]
         mock_cursor.fetchall.side_effect = [
             [("A", "40", 0), ("B", "42", 1)], # Options trong context
@@ -162,7 +164,44 @@ class TutorApiTests(unittest.TestCase):
         self.assertIn("Giải thích chi tiết cho câu hỏi", data["reply"])
         mock_conn.commit.assert_called()
 
-    @patch("tutor_api.urllib.request.urlopen")
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "unit-test"})
+    @patch("tutor_api._call_gemini_api")
+    @patch("tutor_api.search")
+    @patch("tutor_api.pyodbc.connect")
+    def test_ask_persists_document_provenance(self, connect, search, call):
+        self.login_as_student()
+        cursor = connect.return_value.cursor.return_value
+        cursor.fetchone.return_value = (10,)
+        search.return_value = [{"source": "prob", "title": "Tài liệu", "ordinal": 1,
+                                "text": "Tổng xác suất của toàn bộ không gian mẫu là 1."}]
+        call.side_effect = [
+            ('{"answer":"Tổng bằng 1 [1].","citations":[{"id":1,"quote":"Tổng xác suất của toàn bộ không gian mẫu là 1."}]}', "model"),
+            ('{"valid":true}', "model"),
+        ]
+        response = self.client.post("/api/tutor/ask", json={"message": "Tổng xác suất?"},
+                                    headers=self.auth_headers())
+        self.assertEqual(response.status_code, 200)
+        result = response.get_json()
+        self.assertEqual(result["origin"], "document")
+        self.assertIn("Tài liệu (prob, đoạn 1)", result["reply"])
+        inserts = [args for args, _ in cursor.execute.call_args_list if "VALUES (?, 'AI'" in args[0]]
+        self.assertEqual(inserts[0][1], (10, result["reply"], None))
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "unit-test"})
+    @patch("tutor_api._call_gemini_api")
+    def test_generate_rejects_question_with_wrong_answer(self, call):
+        self.login_as_student()
+        call.side_effect = [
+            ('{"question":"Giải phương trình x + 1 = 2.", "options":["1","2","3","-1"],'
+             '"answer":"B","explanation":"Trừ hai vế cho 1, ta được x = 1."}', "model"),
+            ('{"answer":"A","valid":true}', "model"),
+        ]
+        response = self.client.post("/api/tutor/generate", json={"topic": "Toán", "difficulty": 1},
+                                    headers=self.auth_headers())
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn("question", response.get_json())
+
+    @patch("tutor_rag.urllib.request.urlopen")
     def test_call_gemini_api_success(self, mock_urlopen):
         """Kiểm tra gọi mock Google Gemini API thành công."""
         mock_response = MagicMock()

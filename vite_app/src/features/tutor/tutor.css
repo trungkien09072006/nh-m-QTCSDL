@@ -383,3 +383,40 @@
   font-size: 11px;
   color: #7a5a0d;
 }
+
+.tutor-practice {
+  padding: 8px 16px;
+  border-top: 1px solid #edf1f7;
+  font-size: 13px;
+}
+
+.tutor-practice summary,
+.tutor-rendered-content summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tutor-practice-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.tutor-practice-form label {
+  display: grid;
+  gap: 4px;
+}
+
+.tutor-practice-form label:first-child {
+  flex: 1 1 180px;
+}
+
+.tutor-practice-form select {
+  padding: 6px;
+}
+
+.tutor-rendered-content details p {
+  white-space: pre-wrap;
+}

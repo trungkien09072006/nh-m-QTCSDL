@@ -16,7 +16,7 @@ function SimpleMarkdown({ content }) {
       elements.push(
         <ul key={`ul-${elements.length}`}>
           {listItems.map((item, idx) => (
-            <li key={idx} dangerouslySetInnerHTML={{ __html: parseInline(item) }} />
+            <li key={idx}>{parseInline(item)}</li>
           ))}
         </ul>
       );
@@ -26,10 +26,18 @@ function SimpleMarkdown({ content }) {
   }
 
   function parseInline(text) {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*(.*?)\*/g, "<em>$1</em>")
-      .replace(/`([^`]+)`/g, "<code>$1</code>");
+    return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+        return <strong key={index}>{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+        return <em key={index}>{part.slice(1, -1)}</em>;
+      }
+      if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+        return <code key={index}>{part.slice(1, -1)}</code>;
+      }
+      return part;
+    });
   }
 
   lines.forEach((line, index) => {
@@ -47,22 +55,19 @@ function SimpleMarkdown({ content }) {
       elements.push(
         <blockquote
           key={`quote-${index}`}
-          dangerouslySetInnerHTML={{ __html: parseInline(trimmed.substring(2)) }}
-        />
+        >{parseInline(trimmed.substring(2))}</blockquote>
       );
     } else if (trimmed.startsWith("### ")) {
       elements.push(
         <h3
           key={`h3-${index}`}
-          dangerouslySetInnerHTML={{ __html: parseInline(trimmed.substring(4)) }}
-        />
+        >{parseInline(trimmed.substring(4))}</h3>
       );
     } else if (trimmed.startsWith("#### ")) {
       elements.push(
         <h4
           key={`h4-${index}`}
-          dangerouslySetInnerHTML={{ __html: parseInline(trimmed.substring(5)) }}
-        />
+        >{parseInline(trimmed.substring(5))}</h4>
       );
     } else if (trimmed === "---") {
       elements.push(<hr key={`hr-${index}`} style={{ border: 0, borderTop: "1px solid #e9edf4", margin: "10px 0" }} />);
@@ -70,8 +75,7 @@ function SimpleMarkdown({ content }) {
       elements.push(
         <p
           key={`p-${index}`}
-          dangerouslySetInnerHTML={{ __html: parseInline(trimmed) }}
-        />
+        >{parseInline(trimmed)}</p>
       );
     }
   });
@@ -88,6 +92,9 @@ export function TutorChat({ studentName = "Học sinh" }) {
   const [loading, setLoading] = useState(false);
   const [fetchingHistory, setFetchingHistory] = useState(true);
   const [aiStatus, setAiStatus] = useState(null);
+  const [practiceTopic, setPracticeTopic] = useState("");
+  const [difficulty, setDifficulty] = useState(3);
+  const [generating, setGenerating] = useState(false);
   const [errorNotice, setErrorNotice] = useState("");
 
   const messagesEndRef = useRef(null);
@@ -98,7 +105,7 @@ export function TutorChat({ studentName = "Học sinh" }) {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, loading]);
+  }, [messages, loading, generating]);
 
   // Tải trạng thái, ngân hàng câu hỏi và lịch sử tin nhắn ban đầu
   useEffect(() => {
@@ -168,6 +175,25 @@ export function TutorChat({ studentName = "Học sinh" }) {
     }
   }
 
+  async function handleGenerate(event) {
+    event.preventDefault();
+    if (loading || generating) return;
+    setGenerating(true);
+    setErrorNotice("");
+    try {
+      const { question } = await tutorApi.generate({
+        topic: practiceTopic.trim(),
+        difficulty,
+        question_id: selectedQuestion?.id ?? null,
+      });
+      setMessages((prev) => [...prev, { id: Date.now(), sender: "AI", practice: question }]);
+    } catch (err) {
+      setErrorNotice(err.message);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   async function handleResetSession() {
     if (!window.confirm("Bạn có chắc chắn muốn khởi tạo cuộc trò chuyện mới với AI Tutor không?")) {
       return;
@@ -186,6 +212,11 @@ export function TutorChat({ studentName = "Học sinh" }) {
   }
 
   function handleSelectQuestion(q) {
+    if (loading || generating) return;
+    if (selectedQuestion?.id !== q.id) {
+      setPracticeTopic(q.competency || "");
+      setDifficulty(q.difficulty);
+    }
     if (selectedQuestion?.id === q.id) {
       setSelectedQuestion(null);
     } else {
@@ -253,14 +284,14 @@ export function TutorChat({ studentName = "Học sinh" }) {
                 }`}
                 title={aiStatus.instructions}
               >
-                {aiStatus.mode === "EXTERNAL_AI" ? "✨ Gemini AI" : "📚 Tri thức NovaPath (RAG)"}
+                {aiStatus.mode === "EXTERNAL_AI" ? "✨ Gemini AI" : "📚 Tri thức NovaPath"}
               </span>
             )}
 
             <button
               className="tutor-reset-btn"
               onClick={handleResetSession}
-              disabled={loading}
+              disabled={loading || generating}
               title="Khởi tạo cuộc hội thoại mới"
             >
               ↺ Làm mới hội thoại
@@ -314,7 +345,21 @@ export function TutorChat({ studentName = "Học sinh" }) {
                         {m.competency_name ? ` (${m.competency_name})` : ""}
                       </div>
                     )}
-                    <SimpleMarkdown content={m.content} />
+                    {m.practice ? (
+                      <div className="tutor-rendered-content">
+                        <blockquote><strong>Câu hỏi AI tự sinh · Đã qua kiểm tra tự động</strong></blockquote>
+                        <p>{m.practice.topic} · Độ khó {m.practice.difficulty}/5</p>
+                        <p><strong>{m.practice.question}</strong></p>
+                        <ol type="A">
+                          {m.practice.options.map((option, index) => <li key={index}>{option}</li>)}
+                        </ol>
+                        <details>
+                          <summary>Xem đáp án và lời giải</summary>
+                          <p><strong>Đáp án {m.practice.answer}</strong></p>
+                          <p>{m.practice.explanation}</p>
+                        </details>
+                      </div>
+                    ) : <SimpleMarkdown content={m.content} />}
                     <span className="tutor-msg-time">{m.sent_at}</span>
                   </div>
                 </div>
@@ -322,12 +367,12 @@ export function TutorChat({ studentName = "Học sinh" }) {
             })
           )}
 
-          {loading && (
+          {(loading || generating) && (
             <div className="tutor-msg-item ai">
               <div className="tutor-msg-avatar">✦</div>
               <div className="tutor-bubble">
                 <span className="tutor-typing-indicator">
-                  <span>AI Tutor đang suy nghĩ và phân tích dữ liệu...</span>
+                  <span>{generating ? "Đang sinh và kiểm tra câu hỏi..." : "AI Tutor đang phân tích câu hỏi..."}</span>
                 </span>
               </div>
             </div>
@@ -345,7 +390,7 @@ export function TutorChat({ studentName = "Học sinh" }) {
                 onClick={() =>
                   handleSend(`Hãy giải thích chi tiết phương pháp làm bài cho câu hỏi #${selectedQuestion.id}`)
                 }
-                disabled={loading}
+                disabled={loading || generating}
               >
                 💡 Giải thích chi tiết câu #{selectedQuestion.id}
               </button>
@@ -354,18 +399,9 @@ export function TutorChat({ studentName = "Học sinh" }) {
                 onClick={() =>
                   handleSend(`Chỉ ra công thức và các bẫy thường gặp ở câu #${selectedQuestion.id}`)
                 }
-                disabled={loading}
+                disabled={loading || generating}
               >
                 ⚠️ Bẫy thường gặp & Công thức
-              </button>
-              <button
-                className="tutor-chip"
-                onClick={() =>
-                  handleSend(`Cho em một câu hỏi tương tự câu #${selectedQuestion.id} để tự luyện tập`)
-                }
-                disabled={loading}
-              >
-                🎯 Câu hỏi tương tự để luyện
               </button>
             </>
           ) : (
@@ -375,7 +411,7 @@ export function TutorChat({ studentName = "Học sinh" }) {
                 onClick={() =>
                   handleSend("Dựa trên hồ sơ học tập của em, em nên ưu tiên củng cố dạng bài nào trước?")
                 }
-                disabled={loading}
+                disabled={loading || generating}
               >
                 📊 Phân tích năng lực còn yếu của em
               </button>
@@ -384,13 +420,35 @@ export function TutorChat({ studentName = "Học sinh" }) {
                 onClick={() =>
                   handleSend("Hãy chia sẻ cho em chiến thuật phân bổ thời gian khi làm đề thi ĐGNL")
                 }
-                disabled={loading}
+                disabled={loading || generating}
               >
                 ⏱ Chiến thuật phân bổ thời gian thi
               </button>
             </>
           )}
         </div>
+
+        <details className="tutor-practice">
+          <summary>Sinh câu hỏi luyện tập{selectedQuestion ? ` tương tự câu #${selectedQuestion.id}` : ""}</summary>
+          <form className="tutor-practice-form" onSubmit={handleGenerate}>
+            <label>
+              Chủ đề
+              <input className="tutor-input" value={practiceTopic} maxLength={160}
+                required={!selectedQuestion} disabled={loading || generating}
+                onChange={(event) => setPracticeTopic(event.target.value)} />
+            </label>
+            <label>
+              Độ khó
+              <select value={difficulty} disabled={loading || generating}
+                onChange={(event) => setDifficulty(Number(event.target.value))}>
+                {[1, 2, 3, 4, 5].map((level) => <option key={level}>{level}</option>)}
+              </select>
+            </label>
+            <button type="submit" className="tutor-chip" disabled={loading || generating}>
+              Sinh câu hỏi
+            </button>
+          </form>
+        </details>
 
         {/* Khung gửi câu hỏi */}
         <form
@@ -407,14 +465,15 @@ export function TutorChat({ studentName = "Học sinh" }) {
                 ? `Hỏi AI Tutor về câu #${selectedQuestion.id} (hoặc bấm gửi để yêu cầu giải thích)...`
                 : "Hỏi AI Tutor về bài học, công thức, cách giải..."
             }
+            maxLength={2000}
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            disabled={loading}
+            disabled={loading || generating}
           />
           <button
             type="submit"
             className="tutor-send-btn"
-            disabled={loading || (!inputMessage.trim() && !selectedQuestion)}
+            disabled={loading || generating || (!inputMessage.trim() && !selectedQuestion)}
           >
             Gửi ➔
           </button>
